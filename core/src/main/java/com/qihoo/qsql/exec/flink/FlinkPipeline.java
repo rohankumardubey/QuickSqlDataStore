@@ -1,11 +1,11 @@
 package com.qihoo.qsql.exec.flink;
 
+import com.qihoo.qsql.exec.Requirement;
 import com.qihoo.qsql.plan.proc.QueryProcedure;
 import com.qihoo.qsql.api.SqlRunner;
 import com.qihoo.qsql.exec.AbstractPipeline;
 import com.qihoo.qsql.exec.Compilable;
 import com.qihoo.qsql.exec.result.PipelineResult;
-import com.qihoo.qsql.exec.result.JobPipelineResult;
 import com.qihoo.qsql.codegen.flink.FlinkBodyWrapper;
 import org.apache.flink.api.java.ExecutionEnvironment;
 
@@ -36,16 +36,31 @@ public class FlinkPipeline extends AbstractPipeline implements Compilable {
 
     }
 
+    @Override
+    public Object collect() {
+        startup();
+        wrapper.collect(100000);
+        Requirement requirement = compileRequirement(wrapper, executionEnvironment, ExecutionEnvironment.class);
+        try {
+            return requirement.execute();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
     protected void startup() {
         executionEnvironment = ExecutionEnvironment.getExecutionEnvironment();
     }
 
     @Override
-    public PipelineResult show() {
+    public void show() {
         startup();
         wrapper.show();
-        return new JobPipelineResult.ShowPipelineResult(
-            compileRequirement(wrapper, executionEnvironment, ExecutionEnvironment.class));
+        try {
+            compileRequirement(wrapper, executionEnvironment, ExecutionEnvironment.class).execute();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     @Override

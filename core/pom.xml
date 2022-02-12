@@ -22,42 +22,47 @@ limitations under the License.
     <parent>
         <groupId>com.qihoo.qsql</groupId>
         <artifactId>qsql</artifactId>
-        <version>0.5</version>
+        <version>0.7.1</version>
     </parent>
 
     <artifactId>qsql-core</artifactId>
     <packaging>jar</packaging>
-    <version>0.5</version>
+    <version>0.7.1</version>
     <name>qsql-core</name>
 
     <properties>
         <top.dir>${project.basedir}/..</top.dir>
+        <qsql.release>qsql-0.7.1</qsql.release>
+        <output.directory>/${qsql.release}/lib/flink</output.directory>
     </properties>
 
     <dependencies>
         <!-- qsql-->
         <dependency>
             <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-calcite-analysis</artifactId>
+            <artifactId>qsql-calcite-parser</artifactId>
             <version>${project.parent.version}</version>
         </dependency>
         <dependency>
             <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-calcite-elasticsearch</artifactId>
+            <artifactId>qsql-meta</artifactId>
             <version>${project.parent.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-calcite-analysis</artifactId>
-            <version>${project.parent.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <artifactId>asm-commons</artifactId>
+                    <groupId>asm</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>asm</artifactId>
+                    <groupId>asm</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>protobuf-java</artifactId>
+                    <groupId>com.google.protobuf</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- qsql-->
-        <dependency>
-            <groupId>org.apache.calcite</groupId>
-            <artifactId>calcite-linq4j</artifactId>
-        </dependency>
         <dependency>
             <groupId>jline</groupId>
             <artifactId>jline</artifactId>
@@ -80,7 +85,6 @@ limitations under the License.
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
         </dependency>
-
         <dependency>
             <!-- Using special netty transport to start embedded ES instance during tests -->
             <groupId>org.elasticsearch.plugin</groupId>
@@ -88,97 +92,146 @@ limitations under the License.
             <version>${elasticsearch.version}</version>
             <scope>test</scope>
         </dependency>
+
         <!-- spark -->
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.version}</artifactId>
-            <version>${spark.version}</version>
-            <scope>provided</scope>
             <exclusions>
                 <exclusion>
-                    <artifactId>io.netty</artifactId>
-                    <groupId>*</groupId>
+                    <artifactId>netty</artifactId>
+                    <groupId>io.netty</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>netty-all</artifactId>
+                    <groupId>io.netty</groupId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_${scala.version}</artifactId>
-            <version>${spark.version}</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming_${scala.version}</artifactId>
-            <version>${spark.version}</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-hive_${scala.version}</artifactId>
-            <version>${spark.version}</version>
-            <scope>provided</scope>
         </dependency>
 
         <!-- flink -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-java</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-streaming-scala_${scala.version}</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-streaming-java_${scala.version}</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table_${scala.version}</artifactId>
-            <version>${flink.version}</version>
+            <artifactId>flink-table-api-java-bridge_${scala.version}</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-api-scala-bridge_${scala.version}</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients_${scala.version}</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-hive_${scala.version}</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-shaded-hadoop2-uber</artifactId>
+            <version>${flink-shaded-hadoop2-uber.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-metastore</artifactId>
+            <version>${hive-driver.version}</version>
             <exclusions>
                 <exclusion>
-                    <groupId>org.apache.calcite</groupId>
+                    <artifactId>hive-shims</artifactId>
+                    <groupId>org.apache.hive</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-exec</artifactId>
+            <version>${hive-driver.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>hive-shims</artifactId>
+                    <groupId>org.apache.hive</groupId>
+                </exclusion>
+                <exclusion>
                     <artifactId>calcite-core</artifactId>
+                    <groupId>org.apache.calcite</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>calcite-avatica</artifactId>
+                    <groupId>org.apache.calcite</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-jdbc</artifactId>
+            <version>${hive-driver.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>hive-shims</artifactId>
+                    <groupId>org.apache.hive</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>asm-commons</artifactId>
+                    <groupId>asm</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>jetty-all</artifactId>
+                    <groupId>org.eclipse.jetty.aggregate</groupId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-clients_${scala.version}</artifactId>
+            <artifactId>flink-hadoop-compatibility_${scala.version}</artifactId>
             <version>${flink.version}</version>
-            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>${gson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-planner_${scala.version}</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-core</artifactId>
+            <version>${flink.version}</version>
         </dependency>
         <dependency>
             <groupId>dom4j</groupId>
             <artifactId>dom4j</artifactId>
             <version>${dom4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-wikiedits_${scala.version}</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <!--<dependency>-->
-            <!--<groupId>org.apache.flink</groupId>-->
-            <!--<artifactId>flink-connector-elasticsearch5_2.11</artifactId>-->
-            <!--<version>${flink.version}</version>-->
-            <!--<scope>provided</scope>-->
-        <!--</dependency>-->
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-kafka-0.9_${scala.version}</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>commons-dbutils</groupId>
@@ -224,6 +277,13 @@ limitations under the License.
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
         </dependency>
+
+        <!-- oracle -->
+        <dependency>
+            <groupId>com.oracle</groupId>
+            <artifactId>ojdbc6</artifactId>
+        </dependency>
+
         <!-- Process Executor need this jar for lording spark hive driver-->
         <dependency>
             <groupId>org.apache.derby</groupId>
@@ -272,6 +332,50 @@ limitations under the License.
             <artifactId>httpcore</artifactId>
             <version>${httpcore.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.kylin</groupId>
+            <artifactId>kylin-jdbc</artifactId>
+            <version>1.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.massisframework</groupId>
+            <artifactId>j-text-utils</artifactId>
+            <version>0.3.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongo-java-driver</artifactId>
+        </dependency>
+        <dependency>
+            <!-- log4j2 is default logging framework for ES server -->
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest-core</artifactId>
+            <version>${hamcrest.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.mongodb.spark/mongo-spark-connector -->
+        <dependency>
+            <groupId>org.mongodb.spark</groupId>
+            <artifactId>mongo-spark-connector_2.11</artifactId>
+            <version>2.3.3</version>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -296,29 +400,37 @@ limitations under the License.
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration/>
             </plugin>
+
+            <!--***maven assembly ***-->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <version>${maven-dependency-plugin.version}</version>
-                <!-- configurations do not cascade, so all of the definition from
-                     ../pom.xml:build:plugin-management:plugins:plugin must be repeated in child poms -->
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/assembly-flink-fat-jar.xml</descriptor>
+                    </descriptors>
+                </configuration>
                 <executions>
                     <execution>
-                        <id>analyze</id>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
                         <goals>
-                            <goal>analyze-only</goal>
+                            <goal>single</goal>
                         </goals>
-                        <configuration>
-                            <failOnWarning>true</failOnWarning>
-                            <!-- ignore "unused but declared" warnings -->
-                            <ignoredUnusedDeclaredDependencies>
-                                <ignoredUnusedDeclaredDependency>
-                                    xerces:xercesImpl
-                                </ignoredUnusedDeclaredDependency>
-                                <ignoredUnusedDeclaredDependency>xalan:xalan
-                                </ignoredUnusedDeclaredDependency>
-                            </ignoredUnusedDeclaredDependencies>
-                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.1.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-deps</id>
+                        <phase>process-sources</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

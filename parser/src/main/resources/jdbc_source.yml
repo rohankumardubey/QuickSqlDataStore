@@ -1,0 +1,41 @@
+mysql:
+    driver : com.mysql.jdbc.Driver
+    dialect : MysqlSqlDialect
+    showDatabaseSql : SELECT DATABASE()
+    columnValueSql : SELECT COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%s' AND TABLE_SCHEMA = '%s'
+    showTableSql : SHOW TABLES LIKE '%s'
+oracle:
+    driver : oracle.jdbc.driver.OracleDriver
+    dialect : OracleSqlDialect
+    quote : '"'
+    replaceAll : '"rownum",rownum'
+    showDatabaseSql : SELECT sys_context( 'userenv', 'current_schema' ) FROM dual
+    columnValueSql : SELECT COLUMN_NAME, DATA_TYPE, COLUMN_ID FROM USER_TAB_COLUMNS WHERE TABLE_NAME = '%s'
+    showTableSql : SELECT table_name FROM all_tables WHERE table_name LIKE '%s'
+gbase-8s:
+    driver : com.gbase.jdbc.Driver
+    dialect : MysqlSqlDialect
+    showDatabaseSql : SELECT DATABASE()
+    columnValueSql : SELECT COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%s' AND TABLE_SCHEMA = '%s'
+    showTableSql : SHOW TABLES LIKE '%s'
+postgresql:
+    driver : org.postgresql.Driver
+    dialect : PostgresqlSqlDialect
+    showDatabaseSql : select current_database() ||'.'|| current_schema()
+    columnValueSql : SELECT COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%s' AND TABLE_SCHEMA = '%s'
+    showTableSql : select tablename from pg_tables where schemaname = (select current_schema()) and tablename like '%s';
+
+hive-jdbc:
+    dialect : HiveSqlDialect
+    collectorClass : hive
+kylin:
+    dialect : AnsiSqlDialect
+    quote : '"'
+    collectorClass : hive
+
+clickhouse:
+    driver : ru.yandex.clickhouse.ClickHouseDriver
+    dialect : ClickHouseSqlDialect
+    showDatabaseSql : show databases
+    columnValueSql : select name as COLUMN_NAME,type DATA_TYPE,0 ORDINAL_POSITION from system.columns where table='%s' and database='%s'
+    showTableSql : SHOW TABLES LIKE '%s'

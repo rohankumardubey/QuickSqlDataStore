@@ -4,9 +4,9 @@ import com.qihoo.qsql.exception.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.calcite.sql.parser.SqlParseException;
+import com.qihoo.qsql.org.apache.calcite.sql.parser.SqlParseException;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -18,9 +18,11 @@ public class TableNameCollectorTest {
     private static List<String> parseTableName(String sql) {
         TableNameCollector collector = new TableNameCollector();
         try {
-            return collector.parseTableName(sql)
-                .stream()
-                .collect(Collectors.toList());
+            List<String> list = new ArrayList<>();
+            list.addAll(new LinkedHashSet<String>(new ArrayList<>(collector
+                .parseTableName(sql)
+                .tableNames)));
+            return list;
         } catch (SqlParseException ex) {
             throw new RuntimeException(ex.getMessage());
         }
@@ -101,7 +103,7 @@ public class TableNameCollectorTest {
     @Test
     public void testParseMixTableNameWithSubSqlInFrom() {
         String sql = "SELECT A.a1 FROM ( SELECT count(B.b1) as a1 FROM B ) as A";
-        Assert.assertEquals(Arrays.asList("B"), parseTableName(sql));
+        Assert.assertEquals(Collections.singletonList("B"), parseTableName(sql));
     }
 
     @Test
@@ -147,6 +149,18 @@ public class TableNameCollectorTest {
     }
 
     @Test
+    public void testParseInsertInto() {
+        String sql = "INSERT INTO `hello` IN HDFS SELECT 1";
+        TableNameCollector collector = new TableNameCollector();
+        try {
+            Assert.assertTrue(collector.parseTableName(sql).isDml());
+        } catch (SqlParseException ex) {
+            ex.printStackTrace();
+            Assert.assertTrue(false);
+        }
+    }
+
+    @Test
     public void testParseSingleBdNameAndTableName() {
         String sql = "SELECT a1 FROM A.A";
         Assert.assertEquals(Collections.singletonList("A.A"), parseTableName(sql));
@@ -175,4 +189,27 @@ public class TableNameCollectorTest {
             Assert.assertTrue(false);
         }
     }
+
+    @Test
+    public void testIncludeWithWordTableName() {
+        String sql = "with A as (select * from B) select * from A";
+        Assert.assertEquals(Collections.singletonList("B"), parseTableName(sql));
+    }
+
+    @Test
+    public void testManyWithWordTableName() {
+        String sql = "with A as (select * from B),C as (select * from B) select A.*,C.* from A,C";
+        Assert.assertEquals(Collections.singletonList("B"), parseTableName(sql));
+    }
+
+    @Test
+    public void testCaseWhenSubQueryTableName() {
+        String sql = "select case when (select count(*) from store_sales where ss_quantity between 1 and 20) > 25437 "
+            + "then (select avg(ss_ext_discount_amt) "
+            + "from store_sales where ss_quantity between 1 and 20) else (select avg(ss_net_profit) "
+            + "from test.store_sales where ss_quantity between 1 and 20) end bucket1  from reason where r_reason_sk ="
+            + " 1";
+        Assert.assertEquals(Arrays.asList("store_sales","reason"), parseTableName(sql));
+    }
+
 }

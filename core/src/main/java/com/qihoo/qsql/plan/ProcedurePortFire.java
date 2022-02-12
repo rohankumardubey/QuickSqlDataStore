@@ -1,8 +1,10 @@
 package com.qihoo.qsql.plan;
 
 import com.qihoo.qsql.plan.proc.DirectQueryProcedure;
+import com.qihoo.qsql.plan.proc.DiskLoadProcedure;
 import com.qihoo.qsql.plan.proc.ExtractProcedure;
 import com.qihoo.qsql.plan.proc.LoadProcedure;
+import com.qihoo.qsql.plan.proc.PreparedExtractProcedure;
 import com.qihoo.qsql.plan.proc.QueryProcedure;
 import com.qihoo.qsql.plan.proc.TransformProcedure;
 import java.util.HashSet;
@@ -35,12 +37,19 @@ public class ProcedurePortFire {
         //just leave one extract procedure
         if (procedures.size() == 1) {
             //as a part of optimization, this block should move to package 'opt'
-            for (QueryProcedure curr = currHead,
-                next = currHead.next(); curr.hasNext(); curr = curr.next()) {
-                if (next instanceof TransformProcedure) {
-                    curr.resetNext(next.next());
+            if (procedures.get(0) instanceof PreparedExtractProcedure.VirtualExtractor) {
+                for (QueryProcedure curr = currHead,
+                    next = currHead.next(); curr.hasNext(); curr = curr.next()) {
+                    if (next instanceof TransformProcedure) {
+                        curr.resetNext(next.next());
+                    }
                 }
             }
+
+            if (hasDiskLoad(currHead)) {
+                return currHead;
+            }
+
             return new DirectQueryProcedure(currHead);
         } else {
             return currHead;
@@ -58,6 +67,14 @@ public class ProcedurePortFire {
         }
 
         return procedures;
+    }
+
+    //like sqoop
+    private boolean hasDiskLoad(QueryProcedure currHead) {
+        if (! currHead.hasNext()) {
+            return currHead instanceof DiskLoadProcedure;
+        }
+        return hasDiskLoad(currHead.next());
     }
 
     private class FlattenProcedureVisitor extends ProcedureVisitor {

@@ -25,14 +25,15 @@ public class SparkVirtualGenerator extends QueryGenerator {
 
     @Override
     protected void executeQuery() {
-        String invoked = "Dataset<Row> " + alias + " = spark.sql(\"" + query + "\");";
+        String invoked = "tmp = spark.sql(\"" + query + "\");";
         composer.handleComposition(ClassBodyComposer.CodeCategory.SENTENCE, invoked);
+        composer.handleComposition(ClassBodyComposer.CodeCategory.SENTENCE,  "String sql = \"" + query + "\";");
 
     }
 
     @Override
     public void saveToTempTable() {
-        String created = alias + ".createOrReplaceTempView(\"" + tableName + "\");";
+        String created = "tmp.createOrReplaceTempView(\"" + tableName + "\");";
         composer.handleComposition(ClassBodyComposer.CodeCategory.SENTENCE, created);
     }
 

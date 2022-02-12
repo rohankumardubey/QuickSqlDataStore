@@ -3,12 +3,13 @@ package com.qihoo.qsql.codegen;
 import com.qihoo.qsql.codegen.flink.FlinkCsvGenerator;
 import com.qihoo.qsql.codegen.flink.FlinkElasticsearchGenerator;
 import com.qihoo.qsql.codegen.flink.FlinkHiveGenerator;
-import com.qihoo.qsql.codegen.flink.FlinkMySqlGenerator;
+import com.qihoo.qsql.codegen.flink.FlinkJdbcGenerator;
 import com.qihoo.qsql.codegen.flink.FlinkVirtualGenerator;
 import com.qihoo.qsql.codegen.spark.SparkCsvGenerator;
 import com.qihoo.qsql.codegen.spark.SparkElasticsearchGenerator;
 import com.qihoo.qsql.codegen.spark.SparkHiveGenerator;
-import com.qihoo.qsql.codegen.spark.SparkMySqlGenerator;
+import com.qihoo.qsql.codegen.spark.SparkJdbcGenerator;
+import com.qihoo.qsql.codegen.spark.SparkMongoGenerator;
 import com.qihoo.qsql.codegen.spark.SparkVirtualGenerator;
 import com.qihoo.qsql.plan.proc.ExtractProcedure;
 import com.qihoo.qsql.plan.proc.PreparedExtractProcedure;
@@ -21,20 +22,20 @@ import java.util.Properties;
 /**
  * Code generator for different data source.
  */
+//TODO remove context, there is no alias
 public abstract class QueryGenerator {
 
     private static QueryGenerator elasticSearch = null;
     private static QueryGenerator hive = null;
-    private static QueryGenerator mysql = null;
+    private static QueryGenerator jdbc = null;
     private static QueryGenerator virtual = null;
     private static QueryGenerator csv = null;
+    private static QueryGenerator mongo = null;
 
     protected ClassBodyComposer composer;
     protected String query;
     protected String tableName;
     protected Properties properties;
-
-    protected String alias;
 
     protected QueryGenerator() {
     }
@@ -44,51 +45,63 @@ public abstract class QueryGenerator {
      *
      * @param procedure ExtractProcedure, also special for data source
      * @param composer Composer of class body
-     * @param alias Alias of different sub sql, and it is used for create temp TableName
      * @param isSpark Decide if running engine is Spark
      * @return suitable QueryGenerator
      */
-    public static QueryGenerator getQueryGenerator(ExtractProcedure procedure,
-        ClassBodyComposer composer,
-        String alias,
-        boolean isSpark) {
+    public static QueryGenerator getQueryGenerator(ExtractProcedure procedure, ClassBodyComposer composer,
+                                                   boolean isSpark) {
         if (procedure instanceof PreparedExtractProcedure.HiveExtractor) {
-            return createHiveQueryGenerator(procedure, composer, alias, isSpark);
+            return createHiveQueryGenerator(procedure, composer, isSpark);
         } else if (procedure instanceof PreparedExtractProcedure.ElasticsearchExtractor) {
-            return createElasticsearchQueryGenerator(procedure, composer, alias, isSpark);
-        } else if (procedure instanceof PreparedExtractProcedure.MySqlExtractor) {
-            return createMySqlQueryGenerator(procedure, composer, alias, isSpark);
+            return createElasticsearchQueryGenerator(procedure, composer, isSpark);
+        } else if (procedure instanceof PreparedExtractProcedure.JdbcExtractor) {
+            return createJdbcQueryGenerator(procedure, composer, isSpark);
         } else if (procedure instanceof PreparedExtractProcedure.VirtualExtractor) {
-            return createVirtualQueryGenerator(procedure, composer, alias, isSpark);
+            return createVirtualQueryGenerator(procedure, composer, isSpark);
         } else if (procedure instanceof PreparedExtractProcedure.CsvExtractor) {
-            return createCsvQueryGenerator(procedure, composer, alias, isSpark);
+            return createCsvQueryGenerator(procedure, composer, isSpark);
+        } else if (procedure instanceof PreparedExtractProcedure.MongoExtractor) {
+            return createMongoQueryGenerator(procedure, composer, isSpark);
         } else {
             throw new RuntimeException("Unsupported Engine");
         }
     }
 
     private static QueryGenerator createHiveQueryGenerator(ExtractProcedure procedure,
-        ClassBodyComposer composer,
-        String alias,
-        boolean isSpark) {
+                                                           ClassBodyComposer composer,
+                                                           boolean isSpark) {
         if (hive == null) {
             if (isSpark) {
                 hive = new SparkHiveGenerator();
             } else {
                 hive = new FlinkHiveGenerator();
             }
-            setSpecificState(hive, procedure, composer, alias);
+            setSpecificState(hive, procedure, composer);
             hive.prepare();
         } else {
-            setSpecificState(hive, procedure, composer, alias);
+            setSpecificState(hive, procedure, composer);
         }
         return hive;
     }
 
+    private static QueryGenerator createMongoQueryGenerator(ExtractProcedure procedure,
+                                                            ClassBodyComposer composer,
+                                                            boolean isSpark) {
+        if (mongo == null) {
+            if (isSpark) {
+                mongo = new SparkMongoGenerator();
+            }
+            setSpecificState(mongo, procedure, composer);
+            mongo.prepare();
+        } else {
+            setSpecificState(mongo, procedure, composer);
+        }
+        return mongo;
+    }
+
     private static QueryGenerator createElasticsearchQueryGenerator(ExtractProcedure procedure,
-        ClassBodyComposer composer,
-        String alias,
-        boolean isSpark) {
+                                                                    ClassBodyComposer composer,
+                                                                    boolean isSpark) {
         if (elasticSearch == null) {
             if (isSpark) {
                 elasticSearch =
@@ -97,75 +110,70 @@ public abstract class QueryGenerator {
                 elasticSearch =
                     new FlinkElasticsearchGenerator();
             }
-            setSpecificState(elasticSearch, procedure, composer, alias);
+            setSpecificState(elasticSearch, procedure, composer);
             elasticSearch.prepare();
         } else {
-            setSpecificState(elasticSearch, procedure, composer, alias);
+            setSpecificState(elasticSearch, procedure, composer);
         }
         return elasticSearch;
     }
 
-    private static QueryGenerator createMySqlQueryGenerator(ExtractProcedure procedure,
-        ClassBodyComposer composer,
-        String alias,
-        boolean isSpark) {
-        if (mysql == null) {
+    private static QueryGenerator createJdbcQueryGenerator(ExtractProcedure procedure,
+                                                           ClassBodyComposer composer,
+                                                           boolean isSpark) {
+        if (jdbc == null) {
             if (isSpark) {
-                mysql = new SparkMySqlGenerator();
+                jdbc = new SparkJdbcGenerator();
             } else {
-                mysql = new FlinkMySqlGenerator();
+                jdbc = new FlinkJdbcGenerator();
             }
-            setSpecificState(mysql, procedure, composer, alias);
-            mysql.prepare();
+            setSpecificState(jdbc, procedure, composer);
+            jdbc.prepare();
         } else {
-            setSpecificState(mysql, procedure, composer, alias);
+            setSpecificState(jdbc, procedure, composer);
         }
-        return mysql;
+        return jdbc;
     }
 
     private static QueryGenerator createVirtualQueryGenerator(ExtractProcedure procedure,
-        ClassBodyComposer composer,
-        String alias,
-        boolean isSpark) {
+                                                              ClassBodyComposer composer,
+                                                              boolean isSpark) {
         if (virtual == null) {
             if (isSpark) {
                 virtual = new SparkVirtualGenerator();
             } else {
                 virtual = new FlinkVirtualGenerator();
             }
-            setSpecificState(virtual, procedure, composer, alias);
+            setSpecificState(virtual, procedure, composer);
             virtual.prepare();
         } else {
-            setSpecificState(virtual, procedure, composer, alias);
+            setSpecificState(virtual, procedure, composer);
         }
         return virtual;
     }
 
     private static QueryGenerator createCsvQueryGenerator(ExtractProcedure procedure,
-        ClassBodyComposer composer,
-        String alias,
-        boolean isSpark) {
+                                                          ClassBodyComposer composer,
+                                                          boolean isSpark) {
         if (csv == null) {
             if (isSpark) {
                 csv = new SparkCsvGenerator();
             } else {
                 csv = new FlinkCsvGenerator();
             }
-            setSpecificState(csv, procedure, composer, alias);
+            setSpecificState(csv, procedure, composer);
             csv.prepare();
         } else {
-            setSpecificState(csv, procedure, composer, alias);
+            setSpecificState(csv, procedure, composer);
         }
         return csv;
     }
 
     private static void setSpecificState(QueryGenerator generator,
-        ExtractProcedure procedure,
-        ClassBodyComposer composer,
-        String alias) {
-        generator.setAlias(alias);
+                                         ExtractProcedure procedure,
+                                         ClassBodyComposer composer) {
         generator.setComposer(composer);
-        generator.setQuery(procedure.toRecognizedQuery());
+        generator.setQuery(procedure.toRecognizedQuery().replaceAll("\"","\\\\\""));
         generator.setTableName(procedure.getTableName());
         generator.setProperties(procedure.getConnProperties());
     }
@@ -174,9 +182,10 @@ public abstract class QueryGenerator {
      * close each engine.
      */
     public static void close() {
+        mongo = null;
         elasticSearch = null;
         hive = null;
-        mysql = null;
+        jdbc = null;
         virtual = null;
         csv = null;
     }
@@ -184,10 +193,6 @@ public abstract class QueryGenerator {
     //State Pattern
     private void setComposer(ClassBodyComposer composer) {
         this.composer = composer;
-    }
-
-    private void setAlias(String alias) {
-        this.alias = alias;
     }
 
     private void setQuery(String query) {
@@ -231,7 +236,7 @@ public abstract class QueryGenerator {
         return name + "_" + alias;
     }
 
-    String getPropertyOrThrow(Properties properties, String prop) {
+    private String getPropertyOrThrow(Properties properties, String prop) {
         return Optional.ofNullable(properties.get(prop))
             .orElseThrow(() -> new RuntimeException("lack of " + prop + ", please check schema"))
             .toString();
@@ -257,7 +262,6 @@ public abstract class QueryGenerator {
     }
 
     protected static class MethodInvoker extends Invoker {
-
         private MethodInvoker(String identifier) {
             super(identifier);
 

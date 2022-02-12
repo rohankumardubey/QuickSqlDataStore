@@ -1,5 +1,6 @@
 package com.qihoo.qsql.plan;
 
+import com.qihoo.qsql.api.SqlRunner;
 import com.qihoo.qsql.exception.ParseException;
 import com.qihoo.qsql.metadata.MetadataPostman;
 import com.qihoo.qsql.plan.proc.DataSetTransformProcedure;
@@ -7,7 +8,7 @@ import com.qihoo.qsql.plan.proc.DirectQueryProcedure;
 import com.qihoo.qsql.plan.proc.EmbeddedElasticsearchPolicy;
 import com.qihoo.qsql.plan.proc.PreparedExtractProcedure.ElasticsearchExtractor;
 import com.qihoo.qsql.plan.proc.PreparedExtractProcedure.HiveExtractor;
-import com.qihoo.qsql.plan.proc.PreparedExtractProcedure.MySqlExtractor;
+import com.qihoo.qsql.plan.proc.PreparedExtractProcedure.JdbcExtractor;
 import com.qihoo.qsql.plan.proc.QueryProcedure;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,7 +69,7 @@ public class QueryProcedureProducerTest {
                 .createQueryProcedure(sql);
         List<Class> extractorList = getExtractorList(queryProcedure);
         if (extractorList.contains(HiveExtractor.class)
-            && extractorList.contains(MySqlExtractor.class)
+            && extractorList.contains(JdbcExtractor.class)
             && extractorList.contains(DataSetTransformProcedure.class)) {
             Assert.assertTrue(true);
         }
@@ -84,7 +85,7 @@ public class QueryProcedureProducerTest {
                 .createQueryProcedure(sql);
         List<Class> extractorList = getExtractorList(queryProcedure);
         if (extractorList.contains(ElasticsearchExtractor.class)
-            && extractorList.contains(MySqlExtractor.class)
+            && extractorList.contains(JdbcExtractor.class)
             && extractorList.contains(DataSetTransformProcedure.class)) {
             Assert.assertTrue(true);
         }
@@ -111,11 +112,12 @@ public class QueryProcedureProducerTest {
         String sql = "SELECT dep_id, (SELECT COUNT(stu_id) FROM action_required.homework_content)"
             + " FROM edu_manage.department WHERE dep_id = 1";
         QueryProcedure queryProcedure =
-            new QueryProcedureProducer(getSchemaPath(Arrays.asList(MYSQL_TABLE_NAME, HIVE_TABLE_NAME)))
+            new QueryProcedureProducer(getSchemaPath(Arrays.asList(MYSQL_TABLE_NAME, HIVE_TABLE_NAME)),
+                SqlRunner.builder().setTransformRunner(SqlRunner.Builder.RunnerType.SPARK))
                 .createQueryProcedure(sql);
         List<Class> extractorList = getExtractorList(queryProcedure);
         if (extractorList.contains(HiveExtractor.class)
-            && extractorList.contains(MySqlExtractor.class)
+            && extractorList.contains(JdbcExtractor.class)
             && extractorList.contains(DataSetTransformProcedure.class)) {
             Assert.assertTrue(true);
         }
@@ -131,7 +133,7 @@ public class QueryProcedureProducerTest {
             new QueryProcedureProducer(getSchemaPath(Arrays.asList(MYSQL_TABLE_NAME)))
                 .createQueryProcedure(sql);
         List<Class> extractorList = getExtractorList(queryProcedure);
-        if (extractorList.contains(MySqlExtractor.class)) {
+        if (extractorList.contains(JdbcExtractor.class)) {
             Assert.assertTrue(true);
         }
     }
