@@ -103,7 +103,7 @@ public abstract class ProcessExecClient {
             String sparkDir = System.getenv("SPARK_HOME");
             String sparkSubmit = sparkDir == null ? "spark-submit" : sparkDir
                 + File.separator + "bin" + File.separator + "spark-submit";
-            return PropertiesReader.isDevelopEnv() ? sparkSubmit + ".cmd" : sparkSubmit;
+            return ! PropertiesReader.isSupportedShell() ? sparkSubmit + ".cmd" : sparkSubmit;
         }
 
         @Override
@@ -133,7 +133,13 @@ public abstract class ProcessExecClient {
 
         @Override
         protected String[] arguments() {
-            return supplier.assemblyFlinkOptions();
+            List<String> args = supplier.assemblyFlinkOptions();
+            args.add("--class_name");
+            args.add(className());
+            args.add("--source");
+            args.add(new String(Base64.getEncoder().encode(source().getBytes()),
+                StandardCharsets.UTF_8));
+            return args.toArray(new String[0]);
         }
     }
 }

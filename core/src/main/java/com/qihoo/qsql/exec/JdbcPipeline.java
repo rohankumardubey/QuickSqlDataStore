@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.qihoo.qsql.exception.QsqlException;
+import com.qihoo.qsql.exec.result.CloseableIterator;
 import com.qihoo.qsql.metadata.MetadataPostman;
 import com.qihoo.qsql.metadata.SchemaAssembler;
 import com.qihoo.qsql.plan.proc.DiskLoadProcedure;
@@ -16,15 +18,20 @@ import com.qihoo.qsql.api.SqlRunner;
 import com.qihoo.qsql.exec.result.JdbcPipelineResult;
 import com.qihoo.qsql.exec.result.JdbcResultSetIterator;
 import com.qihoo.qsql.exec.result.PipelineResult;
+import java.sql.ResultSetMetaData;
+import java.sql.Types;
+import java.util.Arrays;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.calcite.avatica.util.DateTimeUtils;
-import org.apache.calcite.config.CalciteConnectionProperty;
-import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.model.JsonCustomSchema;
-import org.apache.calcite.model.JsonCustomTable;
-import org.apache.calcite.model.JsonRoot;
-import org.apache.calcite.model.JsonSchema;
-import org.apache.calcite.model.JsonTable;
-import org.apache.calcite.runtime.FlatLists;
+import com.qihoo.qsql.org.apache.calcite.config.CalciteConnectionProperty;
+import com.qihoo.qsql.org.apache.calcite.jdbc.CalciteConnection;
+import com.qihoo.qsql.org.apache.calcite.model.JsonCustomSchema;
+import com.qihoo.qsql.org.apache.calcite.model.JsonCustomTable;
+import com.qihoo.qsql.org.apache.calcite.model.JsonRoot;
+import com.qihoo.qsql.org.apache.calcite.model.JsonSchema;
+import com.qihoo.qsql.org.apache.calcite.model.JsonTable;
+import com.qihoo.qsql.org.apache.calcite.runtime.FlatLists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +64,7 @@ public class JdbcPipeline extends AbstractPipeline {
         + "    {\n"
         + "      name: 'SALES',\n"
         + "      type: 'custom',\n"
-        + "      factory: 'org.apache.calcite.adapter.csv.CsvSchemaFactory',\n"
+        + "      factory: 'com.qihoo.qsql.org.apache.calcite.adapter.csv.CsvSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: 'sales'\n"
         + "      }\n"
@@ -69,12 +76,33 @@ public class JdbcPipeline extends AbstractPipeline {
     private Statement statement;
     private List<String> tableNames;
 
-
     public JdbcPipeline(QueryProcedure procedure,
         List<String> tableNames,
         SqlRunner.Builder builder) {
         super(procedure, builder);
         this.tableNames = tableNames;
+    }
+
+    @Override
+    public void run() {
+        QueryProcedure next = procedure.next();
+        ResultSet resultSet = establishStatement();
+
+        //TODO add jdbc sql translate
+        if (next.hasNext() && next.next() instanceof DiskLoadProcedure) {
+            String path = ((DiskLoadProcedure) next).path;
+            String deliminator;
+            if (((DiskLoadProcedure) next).getDataFormat() == LoadProcedure.DataFormat.DEFAULT) {
+                deliminator = "\t";
+            } else {
+                deliminator = " ";
+            }
+            new JdbcPipelineResult.TextPipelineResult(
+                new JdbcResultSetIterator<>(resultSet), path, deliminator).run();
+        } else {
+            new JdbcPipelineResult.ShowPipelineResult(
+                new JdbcResultSetIterator<>(resultSet)).run();
+        }
     }
 
     /**
@@ -88,9 +116,9 @@ public class JdbcPipeline extends AbstractPipeline {
         try {
             Map<String, String> properties = parseJsonSchema(parsedTables, json);
             switch (properties.get("type")) {
-                case "mysql":
-                    LOGGER.debug("Connecting to MySQL server....");
-                    return createMySqlConnection(properties);
+                case "jdbc":
+                    LOGGER.debug("Connecting to JDBC server....");
+                    return createJdbcConnection(properties);
                 case "elasticsearch":
                     LOGGER.debug("Connection to Elasticsearch server....");
                     return createElasticsearchConnection(json);
@@ -113,7 +141,14 @@ public class JdbcPipeline extends AbstractPipeline {
      */
     public static Connection createSpecificConnection(List<SchemaAssembler> assemblers) {
         if (assemblers.size() < 1) {
-            throw new RuntimeException("There is no valid table name in sql!!");
+            try {
+                return createCsvConnection();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                throw new QsqlException("Error when create Connection with non-table", ex);
+            }
+            // 将无表情况整合进入
+            // throw new RuntimeException("There is no valid table name in sql!!");
         }
         SchemaAssembler result = assemblers.get(0);
 
@@ -133,8 +168,8 @@ public class JdbcPipeline extends AbstractPipeline {
                     return createElasticsearchConnection(
                         "inline: " + MetadataPostman.assembleSchema(assemblers));
                 case JDBC:
-                    LOGGER.debug("Connecting to MySQL server....");
-                    return createMySqlConnection(conn);
+                    LOGGER.debug("Connecting to JDBC server....");
+                    return createJdbcConnection(conn);
                 default:
                     throw new RuntimeException("Unsupported jdbc type");
             }
@@ -154,13 +189,20 @@ public class JdbcPipeline extends AbstractPipeline {
         return connection;
     }
 
-    private static Connection createMySqlConnection(Map<String, String> conn)
+    //TODO add zeroDateTimeBehavior=convertToNull property
+    private static Connection createJdbcConnection(Map<String, String> conn)
         throws ClassNotFoundException, SQLException {
-        Class.forName("com.mysql.jdbc.Driver");
-        String ip = conn.getOrDefault("jdbcNode", "");
-        String port = conn.getOrDefault("jdbcPort", "");
-        String db = conn.getOrDefault("dbName", "");
-        String url = conn.getOrDefault("jdbcUrl", "jdbc:mysql://" + ip + ":" + port + "/" + db);
+        if (! conn.containsKey("jdbcDriver")) {
+            throw new RuntimeException("The `jdbcDriver` property needed to be set.");
+        }
+        Class.forName(conn.get("jdbcDriver"));
+        // String ip = conn.getOrDefault("jdbcNode", "");
+        // String port = conn.getOrDefault("jdbcPort", "");
+        // String db = conn.getOrDefault("dbName", "");
+        if (! conn.containsKey("jdbcUrl")) {
+            throw new RuntimeException("The `jdbcUrl` property needed to be set.");
+        }
+        String url = conn.get("jdbcUrl");
         String user = conn.getOrDefault("jdbcUser", "");
         String password = conn.getOrDefault("jdbcPassword", "");
         Connection connection = DriverManager.getConnection(url, user, password);
@@ -203,9 +245,14 @@ public class JdbcPipeline extends AbstractPipeline {
      * @throws SQLException sql exception
      */
     public static Connection createCsvConnection(String json) throws SQLException {
-        Properties info = new Properties();
-        info.put("model", json);
-        Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+        ConnectionFactory connectionFactory = new MapConnectionFactory(
+            ImmutableMap.of("unquotedCasing", "unchanged", "caseSensitive", "true"),
+            ImmutableList.of()
+        ).with("model", json);
+
+        // Properties info = new Properties();
+        // info.put("model", json);
+        Connection connection = connectionFactory.createConnection();
         LOGGER.debug("Connect with embedded calcite server successfully!");
         return connection;
     }
@@ -215,31 +262,18 @@ public class JdbcPipeline extends AbstractPipeline {
     }
 
     @Override
-    public void run() {
-        QueryProcedure next = procedure.next();
-        ResultSet resultSet = establishStatement();
-
-        if (next instanceof DiskLoadProcedure) {
-            String path = ((DiskLoadProcedure) next).path;
-            String deliminator;
-            if (((DiskLoadProcedure) next).getDataFormat() == LoadProcedure.DataFormat.DEFAULT) {
-                deliminator = "\t";
-            } else {
-                deliminator = " ";
-            }
-            new JdbcPipelineResult.TextPipelineResult(
-                new JdbcResultSetIterator<>(resultSet), path, deliminator).run();
-        } else {
-            new JdbcPipelineResult.ShowPipelineResult(
-                new JdbcResultSetIterator<>(resultSet)).run();
-        }
+    public Object collect() {
+        return establishStatement();
     }
 
     @Override
-    public PipelineResult show() {
+    public void show() {
         ResultSet resultSet = establishStatement();
-        return new JdbcPipelineResult.ShowPipelineResult(
-            new JdbcResultSetIterator<>(resultSet));
+        if (resultSet != null) {
+            JdbcResultSetIterator<Object> iterator = new JdbcResultSetIterator<>(resultSet);
+            print(iterator);
+            iterator.close();
+        }
     }
 
     @Override
@@ -340,7 +374,6 @@ public class JdbcPipeline extends AbstractPipeline {
     }
 
     private Connection getConnection() {
-
         if (tableNames.isEmpty()) {
             try {
                 LOGGER.debug("There is no table name in SQL, use embedded SQL connection");
@@ -358,7 +391,7 @@ public class JdbcPipeline extends AbstractPipeline {
     }
 
     enum JdbcType {
-        ELASTICSEARCH, MYSQL, CSV
+        ELASTICSEARCH, JDBC, CSV
     }
 
     public interface ConnectionPostProcessor {
@@ -428,7 +461,7 @@ public class JdbcPipeline extends AbstractPipeline {
         private JdbcType type = null;
 
         JsonVisitor(List<String> names) {
-            this.names = names.stream().collect(Collectors.toList());
+            this.names = new ArrayList<>(names);
         }
 
         Map<String, String> getConnectionInfo() {
@@ -440,7 +473,7 @@ public class JdbcPipeline extends AbstractPipeline {
                 case CSV:
                     connectionInfo.put("type", "csv");
                     break;
-                case MYSQL:
+                case JDBC:
                     connectionInfo =
                         jdbcProps.stream().reduce((left, right) -> {
                             String leftUrl = left.getOrDefault("jdbcUrl", "");
@@ -456,7 +489,7 @@ public class JdbcPipeline extends AbstractPipeline {
                             "Not find any schema info for given table names in "
                                 + "sql"));
 
-                    connectionInfo.put("type", "mysql");
+                    connectionInfo.put("type", "jdbc");
                     break;
                 default:
                     throw new RuntimeException("Do not support this engine type: " + type);
@@ -473,10 +506,7 @@ public class JdbcPipeline extends AbstractPipeline {
         }
 
         boolean visit(JsonSchema schema) {
-            if (schema instanceof JsonCustomSchema) {
-                return visit((JsonCustomSchema) schema);
-            }
-            return false;
+            return schema instanceof JsonCustomSchema && visit((JsonCustomSchema) schema);
         }
 
         boolean visit(JsonCustomSchema schema) {
@@ -499,8 +529,8 @@ public class JdbcPipeline extends AbstractPipeline {
             }
 
             if (jdbcProps.size() == names.size()) {
-                if (schema.factory.toLowerCase().contains("mysql")) {
-                    type = JdbcType.MYSQL;
+                if (schema.factory.toLowerCase().contains("jdbc")) {
+                    type = JdbcType.JDBC;
                 } else if (schema.factory.toLowerCase().contains("elasticsearch")) {
                     type = JdbcType.ELASTICSEARCH;
                 } else if (schema.factory.toLowerCase().contains("csv")) {
@@ -511,4 +541,124 @@ public class JdbcPipeline extends AbstractPipeline {
             return false;
         }
     }
+
+    /**
+     * print result.
+     */
+    public void print(CloseableIterator<Object> iterator) {
+        try {
+            ResultSet resultSet = ((JdbcResultSetIterator) iterator).getResultSet();
+            ResultSetMetaData meta = resultSet.getMetaData();
+            int length = meta.getColumnCount();
+            String[] colLabels = new String[length];
+            int[] colCounts = new int[length];
+            int[] types = new int[length];
+            int[] changes = new int[length];
+            Arrays.fill(changes, 0);
+
+            for (int i = 0; i < meta.getColumnCount(); i++) {
+                colLabels[i] = meta.getColumnLabel(i + 1).toUpperCase();
+                types[i] = meta.getColumnType(i + 1);
+            }
+
+            fillWithDisplaySize(types, colCounts);
+            printResults(meta, resultSet, colLabels, colCounts, changes);
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private void printResults(ResultSetMetaData meta, ResultSet resultSet,
+        String[] colLabels, int[] colCounts, int[] changes) throws SQLException {
+        StringBuilder builder = new StringBuilder();
+
+        for (int i = 0; i < meta.getColumnCount(); i++) {
+            if (colLabels[i].length() > colCounts[i]) {
+                changes[i] = colLabels[i].length() - colCounts[i];
+                colCounts[i] = colLabels[i].length();
+            }
+            int sep = (colCounts[i] - colLabels[i].length());
+            builder.append(String.format("|%s%" + (sep == 0 ? "" : sep) + "s", colLabels[i], ""));
+        }
+        builder.append("|");
+        int[] colWeights = Arrays.copyOf(colCounts, colCounts.length);
+
+        Function<String[], int[]> component = (labels) -> {
+            int[] weights = new int[colWeights.length];
+            for (int i = 0; i < weights.length; i++) {
+                weights[i] = colWeights[i] + changes[i];
+            }
+            return weights;
+        };
+
+        Supplier<String> framer = () ->
+            "+" + Arrays.stream(component.apply(colLabels))
+                .mapToObj(col -> {
+                    char[] fr = new char[col];
+                    Arrays.fill(fr, '-');
+                    return new String(fr);
+                }).reduce((x, y) -> x + "+" + y).orElse("") + "+";
+
+        if (! resultSet.next()) {
+            System.out.println("[Empty set]");
+            return;
+        }
+
+        System.out.println(framer.get());
+        System.out.println(builder.toString());
+        System.out.println(framer.get());
+
+        do {
+            StringBuilder line = new StringBuilder();
+            for (int i = 0; i < meta.getColumnCount(); i++) {
+                String value = resultSet.getString(i + 1);
+                if (value == null) {
+                    value = "null";
+                }
+                if (value.length() > colCounts[i]) {
+                    changes[i] = value.length() - colCounts[i];
+                    colCounts[i] = value.length();
+                }
+                int sep = (colCounts[i] - value.length());
+                line.append(
+                    String.format("|%s%" + (sep == 0 ? "" : sep) + "s", value, ""));
+            }
+            line.append("|");
+            System.out.println(line.toString());
+        }
+        while (resultSet.next());
+
+        System.out.println(framer.get());
+    }
+
+    private void fillWithDisplaySize(int[] type, int[] colCounts) {
+        for (int i = 0; i < type.length; i++) {
+            switch (type[i]) {
+                case Types.BOOLEAN:
+                case Types.TINYINT:
+                case Types.SMALLINT:
+                    colCounts[i] = 4;
+                    break;
+                case Types.INTEGER:
+                case Types.BIGINT:
+                case Types.REAL:
+                case Types.FLOAT:
+                case Types.DOUBLE:
+                    colCounts[i] = 8;
+                    break;
+                case Types.CHAR:
+                case Types.VARCHAR:
+                    colCounts[i] = 20;
+                    break;
+                case Types.DATE:
+                case Types.TIME:
+                case Types.TIMESTAMP:
+                    colCounts[i] = 20;
+                    break;
+                default:
+                    colCounts[i] = 20;
+            }
+        }
+    }
+
 }

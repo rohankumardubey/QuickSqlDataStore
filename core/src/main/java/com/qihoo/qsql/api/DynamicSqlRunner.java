@@ -1,8 +1,10 @@
 package com.qihoo.qsql.api;
 
+import com.qihoo.qsql.api.SqlRunner.Builder.RunnerType;
 import com.qihoo.qsql.exception.QsqlException;
 import com.qihoo.qsql.metadata.MetadataPostman;
 import com.qihoo.qsql.plan.QueryProcedureProducer;
+import com.qihoo.qsql.plan.QueryTables;
 import com.qihoo.qsql.plan.proc.DirectQueryProcedure;
 import com.qihoo.qsql.plan.proc.ExtractProcedure;
 import com.qihoo.qsql.plan.proc.PreparedExtractProcedure;
@@ -60,13 +62,18 @@ public class DynamicSqlRunner extends SqlRunner {
         if (schema.equals("inline: ")) {
             schema = JdbcPipeline.CSV_DEFAULT_SCHEMA;
         }
-        return new QueryProcedureProducer(schema).createQueryProcedure(sql);
+        return new QueryProcedureProducer(schema, environment).createQueryProcedure(sql);
     }
 
     @Override
     public AbstractPipeline sql(String sql) {
         LOGGER.info("The SQL that is ready to execute is: \n" + sql);
-        tableNames = SqlUtil.parseTableName(sql);
+        QueryTables tables = SqlUtil.parseTableName(sql);
+        tableNames = tables.tableNames;
+
+        if (tables.isDml()) {
+            environment.setTransformRunner(RunnerType.SPARK);
+        }
 
         LOGGER.debug("Parsed table names for upper SQL are: {}", tableNames);
         QueryProcedure procedure = createQueryPlan(sql);
@@ -105,10 +112,10 @@ public class DynamicSqlRunner extends SqlRunner {
             return pipeline;
         } else {
             if (LOGGER.isDebugEnabled()) {
-                if (environment.isSpark()) {
-                    LOGGER.debug("Choose mixed runner " + "Spark" + " to execute query");
-                } else {
+                if (environment.isFlink()) {
                     LOGGER.debug("Choose mixed runner " + "Flink" + " to execute query");
+                } else {
+                    LOGGER.debug("Choose mixed runner " + "Spark" + " to execute query");
                 }
             }
             return getOrCreateClusterPipeline(procedure);
@@ -127,13 +134,16 @@ public class DynamicSqlRunner extends SqlRunner {
     private AbstractPipeline getOrCreateClusterPipeline(QueryProcedure procedure) {
         if (this.pipeline == null) {
             //runner type can't be changed
-            if (environment.isSpark()) {
-                this.pipeline = new SparkPipeline(procedure, environment);
-            } else {
+            if (environment.isFlink()) {
                 this.pipeline = new FlinkPipeline(procedure, environment);
+            } else {
+                this.pipeline = new SparkPipeline(procedure, environment);
             }
         }
 
         return this.pipeline;
     }
+    //TODO extract all of SqlParser for parsing by one config
+    //TODO test set identifier escape in dialect
+    //TODO adjust code architecture, make jdbc and runner perform in the same way.(always translate to a new lang)
 }

@@ -2,31 +2,40 @@ package com.qihoo.qsql.launcher;
 
 import com.qihoo.qsql.api.DynamicSqlRunner;
 import com.qihoo.qsql.api.SqlRunner;
+import com.qihoo.qsql.api.SqlRunner.Builder;
 import com.qihoo.qsql.api.SqlRunner.Builder.RunnerType;
 import com.qihoo.qsql.exception.EmptyMetadataException;
 import com.qihoo.qsql.exception.QsqlException;
 import com.qihoo.qsql.exec.AbstractPipeline;
+import com.qihoo.qsql.exec.DdlFactory;
+import com.qihoo.qsql.exec.DdlOperation;
 import com.qihoo.qsql.exec.JdbcPipeline;
 import com.qihoo.qsql.exec.result.CloseableIterator;
+import com.qihoo.qsql.exec.result.JdbcPipelineResult;
 import com.qihoo.qsql.exec.result.JdbcResultSetIterator;
 import com.qihoo.qsql.launcher.OptionsParser.SubmitOption;
 import com.qihoo.qsql.metadata.MetadataMapping;
 import com.qihoo.qsql.metadata.MetadataPostman;
 import com.qihoo.qsql.metadata.SchemaAssembler;
 import com.qihoo.qsql.plan.QueryProcedureProducer;
+import com.qihoo.qsql.plan.QueryTables;
+import com.qihoo.qsql.plan.proc.ExtractProcedure;
+import com.qihoo.qsql.plan.proc.PreparedExtractProcedure;
 import com.qihoo.qsql.plan.proc.QueryProcedure;
+import com.qihoo.qsql.utils.PropertiesReader;
 import com.qihoo.qsql.utils.SqlUtil;
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import org.apache.commons.cli.ParseException;
-import org.apache.log4j.PropertyConfigurator;
+import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,9 +45,10 @@ import org.slf4j.LoggerFactory;
 public class ExecutionDispatcher {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ExecutionDispatcher.class);
+    private static final SimpleDateFormat SDF = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
 
     static {
-        config();
+        PropertiesReader.configLogger();
     }
 
     /**
@@ -48,58 +58,108 @@ public class ExecutionDispatcher {
      * @throws SQLException SQLException
      * @throws ParseException ParseException
      */
-    public static void main(String[] args) throws
-        SQLException, ParseException {
-        if (args.length == 0) {
-            throw new RuntimeException("I have nothing to execute,"
-                + " Please input your SQL behind execution command as first argument!!");
-        }
+    public static void main(String[] args) {
+        Date start = new Date();
+        LOGGER.info("job.execute.start:" + SDF.format(start));
+        try {
+            if (args.length == 0) {
+                throw new RuntimeException("I have nothing to execute,"
+                    + " Please input your SQL behind execution command as first argument!!");
+            }
+            OptionsParser parser = new OptionsParser(args);
+            final String sqlArg = parser.getOptionValue(SubmitOption.SQL);
+            String runner = parser.getOptionValue(SubmitOption.RUNNER);
 
-        OptionsParser parser = new OptionsParser(args);
-        String sqlArg = parser.getOptionValue(SubmitOption.SQL);
-        String runner = parser.getOptionValue(SubmitOption.RUNNER);
+            String sql = new String(Base64.getDecoder().decode(sqlArg), StandardCharsets.UTF_8).trim();
+            LOGGER.info("Your SQL is '{}'", sql);
+            //list tables or databases from meta-data
+            //if (sql.toUpperCase().startsWith("SHOW") || sql.toUpperCase().startsWith("DESC")) {
+            //    //ShowDbHandler.dealSql(sql);
+            //    return;
+            //}
+            String sqlType = getSqlType(sql);
+            DdlOperation ddlOperation = DdlFactory.getDdlOperation(sqlType);
+            if (ObjectUtils.anyNotNull(ddlOperation)) {
+                ddlOperation.execute(sql);
+                return;
+            }
+            QueryTables tables = SqlUtil.parseTableName(sql);
+            List<String> tableNames = tables.tableNames;
 
-        String sql = new String(Base64.getDecoder().decode(sqlArg), StandardCharsets.UTF_8);
-        List<String> tableNames = SqlUtil.parseTableName(sql);
+            if (tables.isDml()) {
+                runner = "SPARK";
+            }
 
-        welcome();
-        long latestTime = System.currentTimeMillis();
-        LOGGER.info("Parsing table names has finished, {}",
-            tableNames.isEmpty() ? "it's a non-table query."
-                : "you will query tables: " + tableNames);
+            welcome();
+            long latestTime = System.currentTimeMillis();
+            LOGGER.info("Parsing table names has finished, {}",
+                tableNames.isEmpty() ? "it's a non-table query."
+                    : "you will query tables: " + tableNames);
 
-        if (tryToExecuteQueryDirectly(sql, tableNames, runner)) {
-            System.out.printf("(%.2f sec)", ((double) (System.currentTimeMillis() - latestTime) / 1000));
-            return;
-        }
-
-        String schema = loadSchemaForTables(tableNames);
-        QueryProcedure procedure = new QueryProcedureProducer(schema).createQueryProcedure(sql);
-
-        SqlRunner sqlRunner = SqlRunner.builder()
-            .setAcceptedResultsNum(100)
-            .setTransformRunner(RunnerType.value(runner)).ok();
-        AbstractPipeline pipeline = ((DynamicSqlRunner) sqlRunner).chooseAdaptPipeline(procedure);
-        if (pipeline instanceof JdbcPipeline && isPointedToExecuteByJdbc(runner)) {
-            try (Connection connection = JdbcPipeline.createSpecificConnection(
-                //TODO retrieve metadata repeatedly, should be optimized
-                MetadataPostman.getAssembledSchema(tableNames))) {
-                executeJdbcQuery(connection, sql);
+            if (tryToExecuteQueryDirectly(sql, tableNames, runner)) {
                 System.out.printf("(%.2f sec)", ((double) (System.currentTimeMillis() - latestTime) / 1000));
                 return;
             }
+
+            Builder builder = SqlRunner.builder()
+                .setAcceptedResultsNum(100)
+                .setTransformRunner(RunnerType.value(runner));
+
+            String schema = loadSchemaForTables(tableNames);
+            QueryProcedure procedure = new QueryProcedureProducer(schema, builder).createQueryProcedure(sql);
+
+            AbstractPipeline pipeline = ((DynamicSqlRunner) builder.ok()).chooseAdaptPipeline(procedure);
+            Date sqlPased = new Date();
+            LOGGER.info("SQL.parsed:" + SDF.format(sqlPased));
+            if (pipeline instanceof JdbcPipeline && isPointedToExecuteByJdbc(runner)) {
+                jdbcExecuter(sql, tableNames, procedure, sqlPased, start);
+                return;
+            }
+            LOGGER.info("It's a complex query, we need to setup computing engine, waiting...");
+            ProcessExecClient execClient = ProcessExecClient.createProcessClient(pipeline, parser);
+            Date apply = new Date();
+            LOGGER.info("apply.resource:" + SDF.format(apply));
+            execClient.exec();
+            Date executed = new Date();
+            LOGGER.info("job.execute.final:" + SDF.format(executed));
+            LOGGER.info("SQL.parsed.time:" + String.valueOf(sqlPased.getTime() - start.getTime()));
+            LOGGER.info("resource.apply.time:" + String.valueOf(apply.getTime() - sqlPased.getTime()));
+            LOGGER.info("job.query.time:" + String.valueOf(executed.getTime() - apply.getTime()));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            LOGGER.error("execution.error:" + ex.getMessage());
         }
+    }
 
-        LOGGER.info("It's a complex query, we need to setup computing engine, waiting...");
-
-        ProcessExecClient execClient = ProcessExecClient.createProcessClient(pipeline, parser);
-        execClient.exec();
-        System.out.printf("(%.2f sec)\n", ((double) (System.currentTimeMillis() - latestTime) / 1000));
+    private static void jdbcExecuter(String sql, List<String> tableNames, QueryProcedure procedure, Date sqlPased,
+                                     Date start)
+        throws
+        SQLException {
+        try (Connection connection = JdbcPipeline.createSpecificConnection(
+            //TODO retrieve metadata repeatedly, should be optimized
+            MetadataPostman.getAssembledSchema(tableNames))) {
+            Date apply = new Date();
+            LOGGER.info("apply.resource:" + SDF.format(apply));
+            procedure = procedure.next();
+            if (procedure instanceof PreparedExtractProcedure.ElasticsearchExtractor) {
+                sql = ((PreparedExtractProcedure.ElasticsearchExtractor) procedure).sql();
+            } else {
+                sql = ((ExtractProcedure) procedure).toRecognizedQuery();
+            }
+            executeJdbcQuery(connection, sql);
+            Date executed = new Date();
+            LOGGER.info("job.execute.final:" + SDF.format(executed));
+            // System.out.printf("(%.2f sec)", ((double) (System.currentTimeMillis() - latestTime) / 1000));
+            LOGGER.info("SQL.parsed.time:" + String.valueOf(sqlPased.getTime() - start.getTime()));
+            LOGGER.info("resource.apply.time:" + String.valueOf(apply.getTime() - sqlPased.getTime()));
+            LOGGER.info("job.query.time:" + String.valueOf(executed.getTime() - apply.getTime()));
+            return;
+        }
     }
 
     private static boolean tryToExecuteQueryDirectly(String sql, List<String> tableNames, String runner)
         throws SQLException {
-        if (! isParsingCanBeIgnored(tableNames, runner)) {
+        if (!isParsingCanBeIgnored(tableNames, runner)) {
             return false;
         }
         Connection connection = null;
@@ -109,7 +169,7 @@ public class ExecutionDispatcher {
                 connection = JdbcPipeline.createCsvConnection();
             } else {
                 List<SchemaAssembler> assemblers = MetadataPostman.getAssembledSchema(tableNames);
-                if (! isSupportedJdbcDriver(assemblers)) {
+                if (!isSupportedJdbcDriver(assemblers)) {
                     return false;
                 }
                 LOGGER.info("Connecting JDBC server, please wait a moment....");
@@ -131,11 +191,7 @@ public class ExecutionDispatcher {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             ResultSet resultSet = statement.executeQuery();
             try (CloseableIterator<Object> iterator = new JdbcResultSetIterator<>(resultSet)) {
-                if (! iterator.hasNext()) {
-                    System.out.println("[Empty Set]");
-                }
-                iterator.forEachRemaining(result ->
-                    System.out.println(JdbcResultSetIterator.CONCAT_FUNC.apply(result)));
+                new JdbcPipelineResult.ShowPipelineResult(iterator).print();
             } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
@@ -150,7 +206,7 @@ public class ExecutionDispatcher {
     }
 
     private static boolean isParsingCanBeIgnored(List<String> tableNames, String runner) {
-        return tableNames.size() <= 1 && isPointedToExecuteByJdbc(runner);
+        return tableNames.size() < 1 && isPointedToExecuteByJdbc(runner);
     }
 
     private static boolean isPointedToExecuteByJdbc(String runner) {
@@ -176,21 +232,18 @@ public class ExecutionDispatcher {
 
     private static void welcome() {
         String welcome =
-                  "               ____        _      __   _____ ____    __ \n"
+            "               ____        _      __   _____ ____    __ \n"
                 + "              / __ \\__  __(_)____/ /__/ ___// __ \\  / / \n"
                 + "             / / / / / / / / ___/ //_/\\__ \\/ / / / / /  \n"
                 + "            / /_/ / /_/ / / /__/ ,<  ___/ / /_/ / / /___\n"
-                + "Welcome to  \\___\\_\\__,_/_/\\___/_/|_|/____/\\___\\_\\/_____/  version 0.5.";
+                + "Welcome to  \\___\\_\\__,_/_/\\___/_/|_|/____/\\___\\_\\/_____/  version 0.7.0.";
         String slogan = "   \\  Process data placed anywhere with the most flexible SQL  /";
         System.out.println(welcome);
         System.out.println(slogan);
     }
 
-    private static void config() {
-        String logProp;
-        if (((logProp = System.getenv("QSQL_HOME")) != null) && ! logProp.isEmpty()) {
-            PropertyConfigurator.configure(logProp
-                + File.separator + "conf" + File.separator + "log4j.properties");
-        }
+    private static String getSqlType(String sql) {
+        String sqlType = sql.split("\\s+")[0];
+        return sqlType.toUpperCase();
     }
 }
