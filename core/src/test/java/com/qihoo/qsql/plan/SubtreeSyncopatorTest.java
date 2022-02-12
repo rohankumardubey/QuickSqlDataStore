@@ -1,34 +1,38 @@
 package com.qihoo.qsql.plan;
 
+import com.qihoo.qsql.api.SqlRunner;
+import com.qihoo.qsql.api.SqlRunner.Builder;
+import com.qihoo.qsql.api.SqlRunner.Builder.RunnerType;
 import com.qihoo.qsql.exception.ParseException;
 import com.qihoo.qsql.exception.QsqlException;
-import com.qihoo.qsql.metadata.MetadataPostman;
 import com.qihoo.qsql.exec.JdbcPipeline;
+import com.qihoo.qsql.metadata.MetadataPostman;
+import com.qihoo.qsql.plan.func.SqlRunnerFuncTable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
+
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.avatica.util.Quoting;
-import org.apache.calcite.model.ModelHandler;
-import org.apache.calcite.plan.RelTraitDef;
-import org.apache.calcite.plan.hep.HepPlanner;
-import org.apache.calcite.plan.hep.HepProgram;
-import org.apache.calcite.plan.hep.HepProgramBuilder;
-import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.rules.SubQueryRemoveRule;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.sql.parser.SqlParser;
-import org.apache.calcite.sql.validate.SqlConformanceEnum;
-import org.apache.calcite.sql2rel.SqlToRelConverter;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.Planner;
-import org.apache.calcite.tools.RelConversionException;
-import org.apache.calcite.tools.ValidationException;
+import com.qihoo.qsql.org.apache.calcite.model.ModelHandler;
+import com.qihoo.qsql.org.apache.calcite.plan.RelTraitDef;
+import com.qihoo.qsql.org.apache.calcite.plan.hep.HepPlanner;
+import com.qihoo.qsql.org.apache.calcite.plan.hep.HepProgram;
+import com.qihoo.qsql.org.apache.calcite.plan.hep.HepProgramBuilder;
+import com.qihoo.qsql.org.apache.calcite.rel.RelNode;
+import com.qihoo.qsql.org.apache.calcite.rel.rules.SubQueryRemoveRule;
+import com.qihoo.qsql.org.apache.calcite.schema.SchemaPlus;
+import com.qihoo.qsql.org.apache.calcite.sql.SqlNode;
+import com.qihoo.qsql.org.apache.calcite.sql.parser.SqlParseException;
+import com.qihoo.qsql.org.apache.calcite.sql.parser.SqlParser;
+import com.qihoo.qsql.org.apache.calcite.sql.validate.SqlConformanceEnum;
+import com.qihoo.qsql.org.apache.calcite.sql2rel.SqlToRelConverter;
+import com.qihoo.qsql.org.apache.calcite.tools.FrameworkConfig;
+import com.qihoo.qsql.org.apache.calcite.tools.Frameworks;
+import com.qihoo.qsql.org.apache.calcite.tools.Planner;
+import com.qihoo.qsql.org.apache.calcite.tools.RelConversionException;
+import com.qihoo.qsql.org.apache.calcite.tools.ValidationException;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -49,7 +53,7 @@ public class SubtreeSyncopatorTest {
     public void testSimpleSqlWithMySql() {
         String sql = "SELECT dep_id FROM edu_manage.department WHERE dep_id = 1";
         Set<RelNode> result = new Sql(sql).exec();
-        String[] expect = {"LogicalProject-LogicalFilter-MySQLTableScan"};
+        String[] expect = {"LogicalProject-LogicalFilter-JdbcTableScan"};
         Assert.assertArrayEquals("testSimpleSqlWithMySql", expect, sortRelNode(result).toArray());
     }
 
@@ -58,7 +62,7 @@ public class SubtreeSyncopatorTest {
         String sql = "SELECT times, SUM(dep_id) FROM edu_manage.department"
             + " WHERE times = 1 GROUP BY times";
         Set<RelNode> result = new Sql(sql).exec();
-        String[] expect = {"LogicalAggregate-LogicalProject-LogicalFilter-MySQLTableScan"};
+        String[] expect = {"LogicalAggregate-LogicalProject-LogicalFilter-JdbcTableScan"};
         Assert.assertArrayEquals("testSimpleSqlWithMySqlAggregate", expect, sortRelNode(result).toArray());
     }
 
@@ -68,7 +72,7 @@ public class SubtreeSyncopatorTest {
             + " FROM edu_manage.department AS a, action_required.homework_content AS b"
             + " WHERE a.dep_id = b.stu_id";
         Set<RelNode> result = new Sql(sql).exec();
-        String[] expect = {"LogicalProject-MySQLTableScan", "LogicalProject-HiveTableScan"};
+        String[] expect = {"LogicalProject-JdbcTableScan", "LogicalProject-HiveTableScan"};
         Assert.assertArrayEquals("test", expect, sortRelNode(result).toArray());
     }
 
@@ -80,7 +84,7 @@ public class SubtreeSyncopatorTest {
             + " JOIN (SELECT stu_id FROM action_required.homework_content) AS b"
             + " ON(a.dep_id = b.stu_id)";
         Set<RelNode> result = new Sql(sql).exec();
-        String[] expect = {"LogicalProject-LogicalProject-LogicalFilter-MySQLTableScan",
+        String[] expect = {"LogicalProject-LogicalProject-LogicalFilter-JdbcTableScan",
             "LogicalProject-LogicalProject-HiveTableScan"};
         Assert.assertArrayEquals("testMixSqlWithJoinAndFilter", expect, sortRelNode(result).toArray());
     }
@@ -90,7 +94,7 @@ public class SubtreeSyncopatorTest {
         String sql = " (SELECT dep_id FROM edu_manage.department WHERE dep_id = 1)"
             + " UNION (SELECT stu_id FROM action_required.homework_content) ";
         Set<RelNode> result = new Sql(sql).exec();
-        String[] expect = {"LogicalProject-LogicalProject-LogicalFilter-MySQLTableScan",
+        String[] expect = {"LogicalProject-LogicalProject-LogicalFilter-JdbcTableScan",
             "LogicalProject-LogicalProject-HiveTableScan"};
         Assert.assertArrayEquals("testMixSqlWithUnion", expect, sortRelNode(result).toArray());
     }
@@ -101,7 +105,7 @@ public class SubtreeSyncopatorTest {
         String sql = "SELECT dep_id, (SELECT COUNT(stu_id) FROM action_required.homework_content)"
             + " FROM edu_manage.department WHERE dep_id = 1";
         Set<RelNode> result = new Sql(sql).execOptimize();
-        String[] expect = {"LogicalProject-LogicalFilter-MySQLTableScan",
+        String[] expect = {"LogicalProject-LogicalFilter-JdbcTableScan",
             "LogicalProject-LogicalAggregate-LogicalProject-HiveTableScan"};
         Assert.assertArrayEquals("testMixSqlWithUnion", expect, sortRelNode(result).toArray());
     }
@@ -111,7 +115,7 @@ public class SubtreeSyncopatorTest {
         String sql = "SELECT dep_id FROM edu_manage.department WHERE EXISTS "
             + " (SELECT stu_id FROM action_required.homework_content )";
         Set<RelNode> result = new Sql(sql).execOptimize();
-        String[] expect = {"LogicalProject-MySQLTableScan",
+        String[] expect = {"LogicalProject-JdbcTableScan",
             "LogicalProject-LogicalAggregate-LogicalProject-HiveTableScan"};
         Assert.assertArrayEquals("testMixSqlWithUnion", expect, sortRelNode(result).toArray());
     }
@@ -122,7 +126,7 @@ public class SubtreeSyncopatorTest {
         String sql = "SELECT dep_id FROM edu_manage.department WHERE dep_id IN"
             + " (SELECT stu_id FROM action_required.homework_content)";
         Set<RelNode> result = new Sql(sql).execOptimize();
-        String[] expect = {"LogicalProject-MySQLTableScan",
+        String[] expect = {"LogicalProject-JdbcTableScan",
             "LogicalProject-LogicalAggregate-LogicalProject-HiveTableScan"};
         Assert.assertArrayEquals("testMixSqlWithUnion", expect, sortRelNode(result).toArray());
     }
@@ -135,7 +139,7 @@ public class SubtreeSyncopatorTest {
             + " ON(a.dep_id = b.stu_id)";
         Set<RelNode> result = new Sql(sql).exec();
         String[] expect = {
-            "LogicalProject-LogicalJoin-LogicalProject-LogicalFilter-MySQLTableScan-LogicalProject-LogicalValues"
+            "LogicalProject-LogicalJoin-LogicalProject-LogicalFilter-JdbcTableScan-LogicalProject-LogicalValues"
         };
         Assert.assertArrayEquals("testSimpleSqlWithAndWithoutTableName",
             expect, sortRelNode(result).toArray());
@@ -153,8 +157,8 @@ public class SubtreeSyncopatorTest {
     //         + " (SELECT dep_id FROM edu_manage.department)";
     //     Set<RelNode> result = new Sql(sql).exec();
     //     String[] expect = {
-    //         "LogicalProject-LogicalProject-LogicalJoin-LogicalProject-MySQLTableScan-LogicalProject-MySQLTableScan",
-    //         "LogicalProject-LogicalProject-MySQLTableScan"};
+    //         "LogicalProject-LogicalProject-LogicalJoin-LogicalProject-JdbcTableScan-LogicalProject-JdbcTableScan",
+    //         "LogicalProject-LogicalProject-JdbcTableScan"};
     //     Assert.assertArrayEquals("testMixSqlWithJoinBetweenDifferentDb",
     //         expect, sortRelNode(result).toArray());
     // }
@@ -171,9 +175,9 @@ public class SubtreeSyncopatorTest {
     //         + " (SELECT id FROM edu_manage.department_student_relation)";
     //     Set<RelNode> result = new Sql(sql).exec();
     //     String[] expect = {
-    //         "LogicalProject-LogicalProject-MySQLTableScan",
-    //         "LogicalProject-LogicalProject-MySQLTableScan",
-    //         "LogicalProject-LogicalProject-MySQLTableScan"};
+    //         "LogicalProject-LogicalProject-JdbcTableScan",
+    //         "LogicalProject-LogicalProject-JdbcTableScan",
+    //         "LogicalProject-LogicalProject-JdbcTableScan"};
     //     Assert.assertArrayEquals("testMixSqlWithJoinBetweenDifferentDb2",
     //         expect, sortRelNode(result).toArray());
     // }
@@ -213,36 +217,37 @@ public class SubtreeSyncopatorTest {
             init();
         }
 
+        SqlRunnerFuncTable funcTable = SqlRunnerFuncTable.getInstance(RunnerType.DEFAULT);
+        Builder builder = SqlRunner.builder().setTransformRunner(RunnerType.DEFAULT);
+
         private static List<String> parseTableName(String sql) {
             TableNameCollector collector = new TableNameCollector();
             try {
-                return collector.parseTableName(sql)
-                    .stream()
-                    .collect(Collectors.toList());
+                return new ArrayList<>(collector.parseTableName(sql).tableNames);
             } catch (SqlParseException ex) {
                 throw new RuntimeException(ex.getMessage());
             }
         }
 
-        public Set<RelNode> exec() {
+        Set<RelNode> exec() {
             if (this.sql == null) {
                 throw new QsqlException("Please init SQL first");
             }
 
             RelNode origin = buildLogicalPlan(this.sql);
-            SubtreeSyncopator subtreeSyncopator = new SubtreeSyncopator(origin);
+            SubtreeSyncopator subtreeSyncopator = new SubtreeSyncopator(origin, funcTable, builder);
             return subtreeSyncopator.rootNodeSchemas.keySet();
         }
 
         //for subQuery
-        public Set<RelNode> execOptimize() {
+        Set<RelNode> execOptimize() {
             if (this.sql == null) {
                 throw new QsqlException("Please init SQL first");
             }
 
             RelNode origin = buildLogicalPlan(this.sql);
             RelNode optimize = optimizeLogicalPlan(origin);
-            SubtreeSyncopator subtreeSyncopator = new SubtreeSyncopator(optimize);
+            SubtreeSyncopator subtreeSyncopator = new SubtreeSyncopator(optimize, funcTable, builder);
             return subtreeSyncopator.rootNodeSchemas.keySet();
         }
 
@@ -277,7 +282,6 @@ public class SubtreeSyncopatorTest {
                 .setQuoting(Quoting.BACK_TICK)
                 .setUnquotedCasing(Casing.UNCHANGED)
                 // .setUnquotedCasing(Casing.UNCHANGED)
-                .setCaseSensitive(true)
                 .build();
 
             this.config = Frameworks.newConfigBuilder()
