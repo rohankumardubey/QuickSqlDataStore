@@ -1,5 +1,6 @@
 package com.qihoo.qsql.launcher;
 
+import com.qihoo.qsql.api.SqlRunner;
 import com.qihoo.qsql.exception.QsqlException;
 import com.qihoo.qsql.exec.AbstractPipeline;
 import com.qihoo.qsql.exec.Compilable;
@@ -7,7 +8,6 @@ import com.qihoo.qsql.exec.flink.FlinkPipeline;
 import com.qihoo.qsql.exec.spark.SparkPipeline;
 import com.qihoo.qsql.utils.PropertiesReader;
 import java.io.File;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -31,11 +31,12 @@ public abstract class ProcessExecClient {
     protected AbstractPipeline pipeline;
     protected OptionsParser parser;
     protected ArgumentsSupplier supplier;
+    protected SqlRunner.Builder builder;
 
-    private ProcessExecClient(AbstractPipeline pipeline, OptionsParser parser) {
+    private ProcessExecClient(AbstractPipeline pipeline, OptionsParser parser,SqlRunner.Builder builder) {
         this.pipeline = pipeline;
         this.parser = parser;
-        supplier = new ArgumentsSupplier(parser);
+        supplier = new ArgumentsSupplier(parser,builder);
     }
 
     /**
@@ -45,11 +46,11 @@ public abstract class ProcessExecClient {
      * @return the specific client
      */
     public static ProcessExecClient createProcessClient(AbstractPipeline pipeline,
-        OptionsParser parser) {
+                                                        OptionsParser parser, SqlRunner.Builder builder) {
         if (pipeline instanceof SparkPipeline) {
-            return new SparkExecClient(pipeline, parser);
+            return new SparkExecClient(pipeline, parser, builder);
         } else if (pipeline instanceof FlinkPipeline) {
-            return new FlinkExecClient(pipeline, parser);
+            return new FlinkExecClient(pipeline, parser,builder);
         } else {
             throw new QsqlException("Unsupported execution client!!");
         }
@@ -69,7 +70,8 @@ public abstract class ProcessExecClient {
         executor.setStreamHandler(new PumpStreamHandler(System.out));
         try {
             executor.execute(commandLine);
-        } catch (IOException ex) {
+        } catch (Exception ex) {
+            ex.printStackTrace();
             LOGGER.error("Process executing failed!! Caused by: " + ex.getMessage());
             throw new RuntimeException(ex);
         }
@@ -82,7 +84,7 @@ public abstract class ProcessExecClient {
     protected abstract String[] arguments();
 
     protected String source() {
-        if (! (pipeline instanceof Compilable)) {
+        if (!(pipeline instanceof Compilable)) {
             throw new RuntimeException("Can not get requirement source code from Pipeline");
         }
         return ((Compilable) pipeline).source();
@@ -94,8 +96,8 @@ public abstract class ProcessExecClient {
 
     public static class SparkExecClient extends ProcessExecClient {
 
-        SparkExecClient(AbstractPipeline pipeline, OptionsParser parser) {
-            super(pipeline, parser);
+        SparkExecClient(AbstractPipeline pipeline, OptionsParser parser, SqlRunner.Builder builder) {
+            super(pipeline, parser,builder);
         }
 
         @Override
@@ -103,7 +105,7 @@ public abstract class ProcessExecClient {
             String sparkDir = System.getenv("SPARK_HOME");
             String sparkSubmit = sparkDir == null ? "spark-submit" : sparkDir
                 + File.separator + "bin" + File.separator + "spark-submit";
-            return PropertiesReader.isDevelopEnv() ? sparkSubmit + ".cmd" : sparkSubmit;
+            return !PropertiesReader.isSupportedShell() ? sparkSubmit + ".cmd" : sparkSubmit;
         }
 
         @Override
@@ -120,8 +122,8 @@ public abstract class ProcessExecClient {
 
     public static class FlinkExecClient extends ProcessExecClient {
 
-        FlinkExecClient(AbstractPipeline pipeline, OptionsParser parser) {
-            super(pipeline, parser);
+        FlinkExecClient(AbstractPipeline pipeline, OptionsParser parser,SqlRunner.Builder builder) {
+            super(pipeline, parser,builder);
         }
 
         @Override
@@ -133,9 +135,16 @@ public abstract class ProcessExecClient {
 
         @Override
         protected String[] arguments() {
-            return supplier.assemblyFlinkOptions();
+            List<String> args = supplier.assemblyFlinkOptions();
+            args.add("--class_name");
+            args.add(className());
+            args.add("--source");
+            args.add(new String(Base64.getEncoder().encode(source().getBytes()),
+                StandardCharsets.UTF_8));
+            return args.toArray(new String[0]);
         }
     }
+
 }
 
 

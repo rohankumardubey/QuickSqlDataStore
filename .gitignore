@@ -23,4 +23,12 @@ nbbuild/
 nbdist/
 .nb-gradle/
 
+### Sqlite ###
+*-journal
+
 /log/
+site/
+
+metastore_db/
+
+metastore/*.db

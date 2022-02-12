@@ -31,6 +31,30 @@
             </includes>
         </fileSet>
         <fileSet>
+            <directory>${project.parent.basedir}/core/target/</directory>
+            <outputDirectory>/${qsql.release}/lib/flink</outputDirectory>
+            <fileMode>0755</fileMode>
+            <includes>
+                <include>**/qsql-core-0.7.1-fat.jar</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/core/src/main/resources</directory>
+            <outputDirectory>/${qsql.release}/conf</outputDirectory>
+            <fileMode>0755</fileMode>
+            <includes>
+                <include>**/quicksql-runner.properties</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/meta/src/main/resources</directory>
+            <outputDirectory>/${qsql.release}/conf</outputDirectory>
+            <fileMode>0755</fileMode>
+            <includes>
+                <include>**/metadata.properties</include>
+            </includes>
+        </fileSet>
+        <fileSet>
             <directory>${project.parent.basedir}/examples/</directory>
             <outputDirectory>/${qsql.release}/examples</outputDirectory>
             <includes>
@@ -52,13 +76,6 @@
                 <include>**/*</include>
             </includes>
         </fileSet>
-        <fileSet>
-            <directory>${project.parent.basedir}/metastore/scripts/</directory>
-            <outputDirectory>/${qsql.release}/metastore/scripts</outputDirectory>
-            <includes>
-                <include>**/*</include>
-            </includes>
-        </fileSet>
     </fileSets>
 
     <moduleSets>
@@ -75,8 +92,6 @@
             <useProjectArtifact>false</useProjectArtifact>
             <excludes>
                 <exclude>org.scala-lang:*:jar</exclude>
-                <exclude>org.apache.hadoop:*:jar</exclude>
-                <exclude>org.apache.hive:*:jar</exclude>
                 <exclude>org.spark-project.hive:*:jar</exclude>
                 <exclude>org.antlr:*:jar</exclude>
                 <exclude>org.apache.spark:*:jar</exclude>
@@ -92,8 +107,24 @@
                 <include>org.elasticsearch:elasticsearch-spark*:jar</include>
                 <include>mysql:mysql-connector-java*:jar</include>
                 <include>org.apache.derby:derby*:jar</include>
+                <include>*:ojdbc*:jar</include>
             </includes>
             <outputDirectory>/${qsql.release}/lib/spark</outputDirectory>
+            <scope>runtime</scope>
+        </dependencySet>
+        <dependencySet>
+            <useProjectArtifact>false</useProjectArtifact>
+            <includes>
+                <include>com.qihoo.qsql:qsql-core:jar</include>
+                <include>com.qihoo.qsql:qsql-server:jar</include>
+                <include>com.qihoo.qsql:qsql-client:jar</include>
+                <include>org.apache.calcite.avatica:avatica*:jar</include>
+                <include>org.eclipse.jetty:jetty*:jar</include>
+                <include>com.google.guava:guava*:jar</include>
+                <include>org.apache.spark:spark-core*:jar</include>
+                <include>javax.servlet:servlet-api*:jar</include>
+            </includes>
+            <outputDirectory>/${qsql.release}/lib/server</outputDirectory>
             <scope>runtime</scope>
         </dependencySet>
     </dependencySets>

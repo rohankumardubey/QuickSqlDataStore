@@ -12,10 +12,12 @@ import java.util.function.Function;
 import org.apache.commons.cli.ParseException;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.SystemOutRule;
 
+@Ignore
 public class ExecutionDispatcherTest {
 
     @Rule
@@ -32,7 +34,7 @@ public class ExecutionDispatcherTest {
         args.add("--jar");
         args.add("test.jar");
         args.add("--jar_name");
-        args.add("./target/qsql-core-0.5.jar");
+        args.add("./target/qsql-core-0.7.1.jar");
     }
 
     @Test
@@ -74,6 +76,19 @@ public class ExecutionDispatcherTest {
     public void testHiveWithJdbc() {
         try {
             sql("select * from homework_content").runner(RunnerType.JDBC);
+        } catch (QsqlException exception) {
+            Assert.assertTrue(true);
+        }
+    }
+
+    @Test
+    public void testInsertOutput() throws SQLException, ParseException {
+        try {
+            // sql("select 1")
+            //     .runner(RunnerType.SPARK).check(this::executedBySparkOrFlink);
+            sql("insert into `\\output\\` in hdfs "
+                + "select * from department as dep inner join homework_content as stu on dep.dep_id = stu.stu_id")
+                .runner(RunnerType.SPARK).check(this::executedBySparkOrFlink);
         } catch (QsqlException exception) {
             Assert.assertTrue(true);
         }
