@@ -5,7 +5,7 @@
     <parent>
         <artifactId>qsql</artifactId>
         <groupId>com.qihoo.qsql</groupId>
-        <version>0.7.0</version>
+        <version>0.7.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -18,11 +18,6 @@
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>org.apache.calcite.avatica</groupId>
-            <artifactId>avatica</artifactId>
-            <version>1.12.0</version>
-        </dependency>
         <dependency>
             <groupId>com.qihoo.qsql</groupId>
             <artifactId>qsql-core</artifactId>
@@ -41,8 +36,16 @@
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_${scala.version}</artifactId>
-            <version>${spark.version}</version>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <artifactId>protobuf-java</artifactId>
+                    <groupId>com.google.protobuf</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-api-java-bridge_${scala.version}</artifactId>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

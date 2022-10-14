@@ -22,17 +22,17 @@ limitations under the License.
     <parent>
         <groupId>com.qihoo.qsql</groupId>
         <artifactId>qsql</artifactId>
-        <version>0.7.0</version>
+        <version>0.7.1</version>
     </parent>
 
     <artifactId>qsql-core</artifactId>
     <packaging>jar</packaging>
-    <version>0.7.0</version>
+    <version>0.7.1</version>
     <name>qsql-core</name>
 
     <properties>
         <top.dir>${project.basedir}/..</top.dir>
-        <qsql.release>qsql-0.7.0</qsql.release>
+        <qsql.release>qsql-0.7.1</qsql.release>
         <output.directory>/${qsql.release}/lib/flink</output.directory>
     </properties>
 
@@ -40,12 +40,7 @@ limitations under the License.
         <!-- qsql-->
         <dependency>
             <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-calcite-analysis</artifactId>
-            <version>${project.parent.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-calcite-elasticsearch</artifactId>
+            <artifactId>qsql-calcite-parser</artifactId>
             <version>${project.parent.version}</version>
         </dependency>
         <dependency>
@@ -57,14 +52,15 @@ limitations under the License.
                     <artifactId>asm-commons</artifactId>
                     <groupId>asm</groupId>
                 </exclusion>
+                <exclusion>
+                    <artifactId>asm</artifactId>
+                    <groupId>asm</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>protobuf-java</artifactId>
+                    <groupId>com.google.protobuf</groupId>
+                </exclusion>
             </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-calcite-analysis</artifactId>
-            <version>${project.parent.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
         </dependency>
         <!-- qsql-->
         <dependency>
@@ -286,7 +282,6 @@ limitations under the License.
         <dependency>
             <groupId>com.oracle</groupId>
             <artifactId>ojdbc6</artifactId>
-            <version>11.2.0.3</version>
         </dependency>
 
         <!-- Process Executor need this jar for lording spark hive driver-->
@@ -347,6 +342,40 @@ limitations under the License.
             <artifactId>j-text-utils</artifactId>
             <version>0.3.4</version>
         </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongo-java-driver</artifactId>
+        </dependency>
+        <dependency>
+            <!-- log4j2 is default logging framework for ES server -->
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest-core</artifactId>
+            <version>${hamcrest.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.mongodb.spark/mongo-spark-connector -->
+        <dependency>
+            <groupId>org.mongodb.spark</groupId>
+            <artifactId>mongo-spark-connector_2.11</artifactId>
+            <version>2.3.3</version>
+        </dependency>
+
     </dependencies>
 
     <build>

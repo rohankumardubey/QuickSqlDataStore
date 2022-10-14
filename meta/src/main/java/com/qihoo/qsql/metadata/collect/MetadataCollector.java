@@ -6,12 +6,15 @@ import com.qihoo.qsql.metadata.MetadataClient;
 import com.qihoo.qsql.metadata.collect.dto.ElasticsearchProp;
 import com.qihoo.qsql.metadata.collect.dto.HiveProp;
 import com.qihoo.qsql.metadata.collect.dto.JdbcProp;
+import com.qihoo.qsql.metadata.collect.dto.MongoPro;
 import com.qihoo.qsql.metadata.entity.DatabaseParamValue;
 import com.qihoo.qsql.metadata.entity.DatabaseValue;
 import com.qihoo.qsql.metadata.entity.TableValue;
+import com.qihoo.qsql.org.apache.calcite.tools.JdbcSourceInfo;
 import java.io.File;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
@@ -24,7 +27,7 @@ public abstract class MetadataCollector {
 
     static {
         String logProp;
-        if (((logProp = System.getenv("QSQL_HOME")) != null) && ! logProp.isEmpty()) {
+        if (((logProp = System.getenv("QSQL_HOME")) != null) && !logProp.isEmpty()) {
             PropertyConfigurator.configure(logProp
                 + File.separator + "conf" + File.separator + "log4j.properties");
         }
@@ -43,26 +46,29 @@ public abstract class MetadataCollector {
     public static MetadataCollector create(String json, String dataSource, String regexp) {
         try {
             LOGGER.info("Connecting server.....");
+            dataSource = dataSource.toLowerCase();
+            Map<String, Map<String, String>> sourceMap = JdbcSourceInfo.getSourceMap();
+            if (sourceMap.containsKey(dataSource)) {
+                String collectorClassName = sourceMap.get(dataSource).get("collectorClass");
+                if ("hive".equals(collectorClassName)) {
+                    return new HIveJdbcCollector(mapper.readValue(json, HiveProp.class),regexp,dataSource);
+                }else {
+                    return new JdbcCollector(mapper.readValue(json, JdbcProp.class),regexp, sourceMap.get(dataSource),
+                        dataSource);
+                }
+            }
             switch (dataSource.toLowerCase()) {
-                case "oracle":
-                    return new OracleCollector(
-                        mapper.readValue(json, JdbcProp.class), regexp);
                 case "hive":
                     return new HiveCollector(
                         mapper.readValue(json, HiveProp.class), regexp);
-                case "mysql":
-                    return new MysqlCollector(
-                        mapper.readValue(json, JdbcProp.class), regexp);
-                case "kylin":
-                    return new KylinCollector(
-                            mapper.readValue(json, HiveProp.class), regexp);
-                case "hive-jdbc":
-                    return new HiveJdbcCollector(
-                            mapper.readValue(json, HiveProp.class), regexp);
                 case "es":
                 case "elasticsearch":
                     return new ElasticsearchCollector(
                         mapper.readValue(json, ElasticsearchProp.class), regexp);
+                case "mongo":
+                    return new MongoCollector(
+                        mapper.readValue(json, MongoPro.class), regexp) {
+                    };
                 default:
                     throw new RuntimeException("Unsupported datasource.");
             }
@@ -78,7 +84,6 @@ public abstract class MetadataCollector {
         if (args.length < 2) {
             throw new RuntimeException("Required conn info and type at least");
         }
-
         LOGGER.info("Input params: properties({}), type({}), filter regex({})",
             args[0], args[1], args[2]);
         MetadataCollector.create(args[0], args[1], args[2]).execute();
@@ -105,17 +110,16 @@ public abstract class MetadataCollector {
                 LOGGER.info("Reuse database {}!!", dbValue);
             }
             List<String> tableNames = getTableNameList();
-            for (String table : tableNames) {
+            tableNames.forEach(tableName -> {
                 Long tbId;
-                List<TableValue> originTable = client.getTableSchema(table);
-
+                List<TableValue> originTable = client.getTableSchema(tableName);
                 if (originTable.stream().noneMatch(val -> val.getDbId().equals(dbId))) {
-                    TableValue tableValue = convertTableValue(dbId, table);
+                    TableValue tableValue = convertTableValue(dbId, tableName);
                     tbId = client.insertTableSchema(tableValue);
                     LOGGER.info("Insert table {} successfully!!", tableValue.getTblName());
-                    List<ColumnValue> cols = convertColumnValue(tbId, table, dbValue.getName());
+                    List<ColumnValue> cols = convertColumnValue(tbId, tableName, dbValue.getName());
                     if (cols.size() == 0) {
-                        throw new RuntimeException("No column found in table '" + table + "'.");
+                        throw new RuntimeException("No column found in table '" + tableName + "'.");
                     }
                     client.insertFieldsSchema(cols);
                 } else {
@@ -126,10 +130,10 @@ public abstract class MetadataCollector {
                     LOGGER.info("Reuse table {}!!", shoot.getTblName());
                     client.deleteFieldsSchema(tbId);
                     LOGGER.info("Delete fields of table {}!!", shoot.getTblName());
-                    List<ColumnValue> cols = convertColumnValue(tbId, table, dbValue.getName());
+                    List<ColumnValue> cols = convertColumnValue(tbId, tableName, dbValue.getName());
                     client.insertFieldsSchema(cols);
                 }
-            }
+            });
             client.commit();
             LOGGER.info("Successfully collected metadata for {} tables!!", tableNames.size());
             LOGGER.info(tableNames.stream().reduce((x, y) -> x + "\n" + y).orElse(""));
@@ -148,4 +152,5 @@ public abstract class MetadataCollector {
     protected abstract List<ColumnValue> convertColumnValue(Long tbId, String tableName, String dbName);
 
     protected abstract List<String> getTableNameList();
+
 }

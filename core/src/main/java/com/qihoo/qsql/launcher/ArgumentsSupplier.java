@@ -1,5 +1,6 @@
 package com.qihoo.qsql.launcher;
 
+import com.qihoo.qsql.api.SqlRunner;
 import com.qihoo.qsql.launcher.OptionsParser.SubmitOption;
 import com.qihoo.qsql.utils.PropertiesReader;
 import java.util.ArrayList;
@@ -15,8 +16,11 @@ public class ArgumentsSupplier {
 
     public OptionsParser parser;
 
-    public ArgumentsSupplier(OptionsParser parser) {
+    SqlRunner.Builder builder;
+
+    public ArgumentsSupplier(OptionsParser parser, SqlRunner.Builder builder) {
         this.parser = parser;
+        this.builder = builder;
     }
 
     /**
@@ -28,7 +32,7 @@ public class ArgumentsSupplier {
         List<String> arguments = new ArrayList<>();
         Arrays.stream(OptionsParser.SubmitOption.values())
             .filter(submission -> submission.sparkParam != null
-                && ! submission.sparkParam.equals("'non-opt'"))
+                && !submission.sparkParam.equals("'non-opt'"))
             .forEach(submission -> {
                 arguments.add(longSparkOpt(submission));
                 arguments.add(parser.getOptionValue(submission));
@@ -79,7 +83,7 @@ public class ArgumentsSupplier {
         List<String> arguments = new ArrayList<>();
         Arrays.stream(OptionsParser.SubmitOption.values())
             .filter(submission -> submission.flinkParam != null
-                && ! submission.flinkParam.equals("'non-opt'"))
+                && !submission.flinkParam.equals("'non-opt'"))
             .forEach(submission -> {
                 arguments.add(longSparkOpt(submission));
                 arguments.add(parser.getOptionValue(submission));

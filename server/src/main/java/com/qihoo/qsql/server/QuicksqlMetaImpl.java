@@ -1,16 +1,10 @@
 package com.qihoo.qsql.server;
 
 import com.google.common.collect.ImmutableList;
-import com.qihoo.qsql.client.QuicksqlConnectionImpl;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import org.apache.calcite.avatica.AvaticaParameter;
-import org.apache.calcite.avatica.ColumnMetaData;
-import org.apache.calcite.avatica.Meta;
 import org.apache.calcite.avatica.MetaImpl;
 import org.apache.calcite.avatica.QueryState;
 import org.apache.calcite.avatica.remote.TypedValue;
@@ -53,8 +47,6 @@ public class QuicksqlMetaImpl extends MetaImpl {
         try {
             synchronized (callback.getMonitor()) {
                 callback.clear();
-                final QuicksqlConnectionImpl connection = getConnection();
-                // h.signature = connection.mockPreparedSignature(sql);
                 callback.assign(h.signature, null, -1);
             }
             callback.execute();
@@ -100,11 +92,9 @@ public class QuicksqlMetaImpl extends MetaImpl {
     }
 
     @Override public void commit(ConnectionHandle ch) {
-        throw new UnsupportedOperationException();
     }
 
     @Override public void rollback(ConnectionHandle ch) {
-        throw new UnsupportedOperationException();
     }
 
 }

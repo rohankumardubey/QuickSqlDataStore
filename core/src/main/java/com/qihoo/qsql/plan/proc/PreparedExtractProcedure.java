@@ -2,13 +2,8 @@ package com.qihoo.qsql.plan.proc;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.qihoo.qsql.metadata.MetadataMapping;
-import com.qihoo.qsql.utils.SqlUtil;
-import java.io.IOException;
-import java.util.AbstractList;
-import java.util.List;
-import java.util.Properties;
 import com.qihoo.qsql.org.apache.calcite.adapter.csv.CsvTable;
+import com.qihoo.qsql.org.apache.calcite.adapter.custom.JdbcTable;
 import com.qihoo.qsql.org.apache.calcite.adapter.druid.DruidQuery;
 import com.qihoo.qsql.org.apache.calcite.adapter.elasticsearch.ElasticsearchRel;
 import com.qihoo.qsql.org.apache.calcite.adapter.elasticsearch.ElasticsearchRules;
@@ -23,7 +18,7 @@ import com.qihoo.qsql.org.apache.calcite.adapter.enumerable.JavaRowFormat;
 import com.qihoo.qsql.org.apache.calcite.adapter.enumerable.PhysType;
 import com.qihoo.qsql.org.apache.calcite.adapter.enumerable.PhysTypeImpl;
 import com.qihoo.qsql.org.apache.calcite.adapter.hive.HiveTable;
-import com.qihoo.qsql.org.apache.calcite.adapter.custom.JdbcTable;
+import com.qihoo.qsql.org.apache.calcite.adapter.mongodb.MongoTable;
 import com.qihoo.qsql.org.apache.calcite.adapter.virtual.VirtualTable;
 import com.qihoo.qsql.org.apache.calcite.plan.RelOptCluster;
 import com.qihoo.qsql.org.apache.calcite.plan.RelOptLattice;
@@ -39,13 +34,12 @@ import com.qihoo.qsql.org.apache.calcite.rel.RelVisitor;
 import com.qihoo.qsql.org.apache.calcite.rel.core.TableScan;
 import com.qihoo.qsql.org.apache.calcite.rel.rel2sql.RelToSqlConverter;
 import com.qihoo.qsql.org.apache.calcite.rel.type.RelDataType;
+import com.qihoo.qsql.org.apache.calcite.schema.Table;
 import com.qihoo.qsql.org.apache.calcite.sql.SqlDialect;
+import com.qihoo.qsql.org.apache.calcite.sql.SqlDialect.Context;
 import com.qihoo.qsql.org.apache.calcite.sql.SqlNode;
-import com.qihoo.qsql.org.apache.calcite.sql.dialect.AnsiSqlDialect;
 import com.qihoo.qsql.org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import com.qihoo.qsql.org.apache.calcite.sql.dialect.HiveSqlDialect;
-import com.qihoo.qsql.org.apache.calcite.sql.dialect.MysqlSqlDialect;
-import com.qihoo.qsql.org.apache.calcite.sql.dialect.OracleSqlDialect;
 import com.qihoo.qsql.org.apache.calcite.sql.parser.SqlParseException;
 import com.qihoo.qsql.org.apache.calcite.tools.FrameworkConfig;
 import com.qihoo.qsql.org.apache.calcite.tools.Frameworks;
@@ -58,6 +52,15 @@ import com.qihoo.qsql.org.apache.calcite.tools.RuleSets;
 import com.qihoo.qsql.org.apache.calcite.tools.ValidationException;
 import com.qihoo.qsql.org.apache.calcite.util.Pair;
 import com.qihoo.qsql.org.apache.calcite.util.Util;
+import com.qihoo.qsql.utils.SqlUtil;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.util.AbstractList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * Create specific {@link ExtractProcedure} based on type of {@link RelOptTable}, which represent extracting data in
@@ -95,47 +98,46 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
         FrameworkConfig config,
         RelNode relNode,
         String tableName,
-        SqlNode sqlNode) {
+        SqlNode sqlNode,
+        Map<String, Map<String,String>> jdbcSources) {
         //rewrite this paragraph
-        if (relOptTable.getTable() instanceof ElasticsearchTable) {
+        Table table = relOptTable.getTable();
+        if (table instanceof ElasticsearchTable) {
             String newSql = Util.toLinux(sqlNode.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
             return new ElasticsearchExtractor(next,
-                ((ElasticsearchTranslatableTable) relOptTable.getTable()).getProperties(),
+                ((ElasticsearchTranslatableTable) table).getProperties(),
                 config, relNode, tableName, newSql);
-        } else if (relOptTable.getTable() instanceof HiveTable) {
+        } else if (table instanceof HiveTable) {
             return new HiveExtractor(next,
-                ((HiveTable) relOptTable.getTable()).getProperties(),
+                ((HiveTable) table).getProperties(),
                 config, relNode, tableName);
-        } else if (relOptTable.getTable() instanceof JdbcTable) {
+        } else if (table instanceof MongoTable) {
+            String newSql = Util.toLinux(sqlNode.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
+            return new MongoExtractor(next, ((MongoTable) table)
+                .getProperties(), config, relNode, tableName, newSql);
+        } else if (table instanceof JdbcTable) {
             //TODO add more jdbc type
-            String dbType = ((JdbcTable) relOptTable.getTable())
+            String dbType = ((JdbcTable) table)
                 .getProperties().getProperty("dbType", "unknown");
-            switch (dbType.toLowerCase()) {
-                case MetadataMapping.MYSQL:
-                    return new MySqlExtractor(next, ((JdbcTable) relOptTable.getTable())
-                        .getProperties(), config, relNode, tableName);
-                case MetadataMapping.KYLIN:
-                    return new KylinExtractor(next, ((JdbcTable) relOptTable.getTable())
-                            .getProperties(), config, relNode, tableName);
-                case MetadataMapping.HIVE_JDBC:
-                    return new HiveJdbcExtractor(next, ((JdbcTable) relOptTable.getTable())
-                            .getProperties(), config, relNode, tableName);
-                case MetadataMapping.ORACLE:
-                    return new OracleExtractor(next, ((JdbcTable) relOptTable.getTable())
-                        .getProperties(), config, relNode, tableName);
-                default:
-                    throw new RuntimeException("Unsupported database type");
-            }
 
-        } else if (relOptTable.getTable() instanceof VirtualTable) {
+            if (!jdbcSources.keySet().contains(dbType)) {
+                throw new RuntimeException("Unsupported database type");
+            }
+            if (MapUtils.isEmpty(jdbcSources.get(dbType))) {
+                throw new RuntimeException("Not found params");
+            }
+            return new JdbcExtractor(next, ((JdbcTable) table)
+                .getProperties(), config, relNode, tableName,dbType, jdbcSources.get(dbType));
+
+        } else if (table instanceof VirtualTable) {
             String newSql = Util.toLinux(sqlNode.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
             return new VirtualExtractor(next,
-                ((VirtualTable) relOptTable.getTable()).getProperties(),
+                ((VirtualTable) table).getProperties(),
                 config, relNode, tableName, newSql);
-        } else if (relOptTable.getTable() instanceof CsvTable) {
+        } else if (table instanceof CsvTable) {
             String newSql = Util.toLinux(sqlNode.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
             return new CsvExtractor(next,
-                ((CsvTable) relOptTable.getTable()).getProperties(),
+                ((CsvTable) table).getProperties(),
                 config, relNode, tableName, newSql);
         } else {
             throw new RuntimeException("Unsupported metadata type");
@@ -185,7 +187,7 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
     public abstract static class NoSqlExtractor extends PreparedExtractProcedure {
 
         NoSqlExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode, String tableName) {
+                       FrameworkConfig config, RelNode relNode, String tableName) {
             super(next, properties, config, relNode, tableName);
         }
 
@@ -223,8 +225,8 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
          * @param sql sql
          */
         public ElasticsearchExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode,
-            String tableName, String sql) {
+                                      FrameworkConfig config, RelNode relNode,
+                                      String tableName, String sql) {
             super(next, properties, config, relNode, tableName);
             this.sql = sql;
             this.properties = properties;
@@ -292,12 +294,47 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
         }
     }
 
+    public static class MongoExtractor extends NoSqlExtractor {
+        private String sql;
+
+        /**
+         * Extractor of Mongodb.
+         *
+         * @param next next procedure in DAG
+         * @param properties properties of Procedure
+         * @param config config of Procedure
+         * @param relNode relNode
+         * @param tableName tableName in Sql
+         * @param sql sql
+         */
+        public MongoExtractor(QueryProcedure next, Properties properties,
+                              FrameworkConfig config, RelNode relNode,
+                              String tableName, String sql) {
+            super(next, properties, config, relNode, tableName);
+            this.sql = sql;
+        }
+
+        @Override
+        public String toRecognizedQuery() {
+            return sql(new HiveSqlDialect(SqlDialect.EMPTY_CONTEXT)).toLowerCase();
+        }
+
+        @Override
+        public String getCategory() {
+            return "Mongo";
+        }
+
+        public String sql() {
+            return sql;
+        }
+    }
+
     public static class DruidExtractor extends NoSqlExtractor {
 
         private String sql;
 
         public DruidExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode, String tableName, String sql) {
+                              FrameworkConfig config, RelNode relNode, String tableName, String sql) {
             super(next, properties, config, relNode, tableName);
             this.sql = sql;
         }
@@ -351,7 +388,7 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
             // there will be some RelNode with other type between Project and DruidQuery in Logical Tree.
             // Since I cannot find the rule for numbers of the RelNode,
             // loop is used.
-            for (child = relNode; ! (child instanceof DruidQuery); ) {
+            for (child = relNode; !(child instanceof DruidQuery); ) {
                 child = child.getInput(0);
             }
             return (DruidQuery) child;
@@ -362,88 +399,10 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
         }
     }
 
-    public static class MySqlExtractor extends PreparedExtractProcedure {
-
-        public MySqlExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode,
-            String tableName) {
-            super(next, properties, config, relNode, tableName);
-        }
-
-        @Override
-        public String toRecognizedQuery() {
-            return sql(new MysqlSqlDialect(SqlDialect.EMPTY_CONTEXT)).toLowerCase();
-        }
-
-        @Override
-        public String getCategory() {
-            return "MySQL";
-        }
-    }
-
-    public static class KylinExtractor extends PreparedExtractProcedure {
-
-        public KylinExtractor(QueryProcedure next, Properties properties,
-                              FrameworkConfig config, RelNode relNode,
-                              String tableName) {
-            super(next, properties, config, relNode, tableName);
-        }
-
-        @Override
-        public String toRecognizedQuery() {
-            return sql(new AnsiSqlDialect(SqlDialect.EMPTY_CONTEXT
-                    .withDatabaseProduct(SqlDialect.DatabaseProduct.UNKNOWN).withIdentifierQuoteString("\"")));
-        }
-
-        @Override
-        public String getCategory() {
-            return "Kylin";
-        }
-    }
-
-
-    public static class HiveJdbcExtractor extends PreparedExtractProcedure {
-
-        public HiveJdbcExtractor(QueryProcedure next, Properties properties,
-                              FrameworkConfig config, RelNode relNode,
-                              String tableName) {
-            super(next, properties, config, relNode, tableName);
-        }
-
-        @Override
-        public String toRecognizedQuery() {
-            return sql(new HiveSqlDialect(SqlDialect.EMPTY_CONTEXT));
-        }
-
-        @Override
-        public String getCategory() {
-            return "Hive-Jdbc";
-        }
-    }
-
-    public static class OracleExtractor extends PreparedExtractProcedure {
-
-        public OracleExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode,
-            String tableName) {
-            super(next, properties, config, relNode, tableName);
-        }
-
-        @Override
-        public String toRecognizedQuery() {
-            return sql(new OracleSqlDialect(SqlDialect.EMPTY_CONTEXT));
-        }
-
-        @Override
-        public String getCategory() {
-            return "Oracle";
-        }
-    }
-
     public static class HiveExtractor extends PreparedExtractProcedure {
 
         public HiveExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode, String tableName) {
+                             FrameworkConfig config, RelNode relNode, String tableName) {
             super(next, properties, config, relNode, tableName);
         }
 
@@ -463,8 +422,8 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
         private String sql;
 
         public VirtualExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode,
-            String tableName, String sql) {
+                                FrameworkConfig config, RelNode relNode,
+                                String tableName, String sql) {
             super(next, properties, config, relNode, tableName);
             this.sql = sql;
         }
@@ -489,8 +448,8 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
          * CsvExtractor.
          */
         public CsvExtractor(QueryProcedure next, Properties properties,
-            FrameworkConfig config, RelNode relNode,
-            String tableName, String sql) {
+                            FrameworkConfig config, RelNode relNode,
+                            String tableName, String sql) {
             super(next, properties, config, relNode, tableName);
             this.sql = sql;
             this.properties = properties;
@@ -508,6 +467,54 @@ public abstract class PreparedExtractProcedure extends ExtractProcedure {
         @Override
         public String getCategory() {
             return "Csv";
+        }
+    }
+
+
+    public static class JdbcExtractor extends PreparedExtractProcedure {
+        private String dbType;
+        private String dialectClassName;
+        private String quote;
+        private String replaceAll;
+
+        /**
+         * JdbcExtractor.
+         */
+        public JdbcExtractor(QueryProcedure next, Properties properties,
+            FrameworkConfig config, RelNode relNode,
+            String tableName,String dbType,Map<String,String> paramsMap) {
+            super(next, properties, config, relNode, tableName);
+            this.dialectClassName = paramsMap.get("dialect");
+            this.dbType = dbType;
+            this.quote = paramsMap.get("quote");
+            this.replaceAll = paramsMap.get("replaceAll");
+        }
+
+        @Override
+        public String toRecognizedQuery() {
+            try {
+                Class clz = Class.forName("com.qihoo.qsql.org.apache.calcite.sql.dialect." + dialectClassName);
+                Constructor constructor = clz.getConstructor(Context.class);
+                Context context = SqlDialect.EMPTY_CONTEXT;
+                if (StringUtils.isNotBlank(quote)) {
+                    context = context.withIdentifierQuoteString(quote);
+                }
+                String sql = sql((SqlDialect) constructor.newInstance(context));
+                if (StringUtils.isNotBlank(replaceAll)) {
+                    String[] split = replaceAll.split(",");
+                    sql = sql.replaceAll(split[0], split[1]);
+                }
+                System.out.println(sql);
+                return sql;
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+            return "";
+        }
+
+        @Override
+        public String getCategory() {
+            return dbType;
         }
     }
 }
