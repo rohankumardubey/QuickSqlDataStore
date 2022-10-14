@@ -42,6 +42,9 @@ public class MetadataPostman {
                     case 2:
                         fetcher = new MetadataFetcher(names[0], names[1]);
                         break;
+                    case 3:
+                        fetcher = new MetadataFetcher(names[0], names[1], names[2]);
+                        break;
                     default:
                         throw new RuntimeException("Error sql identifier " + identifier);
                 }
@@ -76,6 +79,10 @@ public class MetadataPostman {
 
         MetadataFetcher(String dbName, String tableName) {
             this.dbName = dbName;
+            this.tableName = tableName;
+        }
+        MetadataFetcher(String dbName,String schemaName, String tableName) {
+            this.dbName = dbName + "." + schemaName;
             this.tableName = tableName;
         }
 
@@ -133,8 +140,6 @@ public class MetadataPostman {
                 calciteProperties.put("tableName", tbName);
                 calciteProperties.put("dbType", dbType);
                 MetadataMapping calciteMeta = MetadataMapping.convertToAdapter(dbType);
-                calciteMeta.completeComponentProperties(calciteProperties);
-
                 return new SchemaAssembler(dbName, tbName, calciteMeta, calciteProperties, columnValues);
             } catch (SQLException se) {
                 throw new RuntimeException(se);

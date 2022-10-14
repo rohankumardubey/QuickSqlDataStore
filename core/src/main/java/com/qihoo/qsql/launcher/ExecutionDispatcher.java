@@ -35,7 +35,6 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,9 +76,8 @@ public class ExecutionDispatcher {
             //    //ShowDbHandler.dealSql(sql);
             //    return;
             //}
-            String sqlType = getSqlType(sql);
-            DdlOperation ddlOperation = DdlFactory.getDdlOperation(sqlType);
-            if (ObjectUtils.anyNotNull(ddlOperation)) {
+            DdlOperation ddlOperation = DdlFactory.getDdlOperation(getSqlType(sql));
+            if (null != ddlOperation) {
                 ddlOperation.execute(sql);
                 return;
             }
@@ -109,25 +107,26 @@ public class ExecutionDispatcher {
             QueryProcedure procedure = new QueryProcedureProducer(schema, builder).createQueryProcedure(sql);
 
             AbstractPipeline pipeline = ((DynamicSqlRunner) builder.ok()).chooseAdaptPipeline(procedure);
-            Date sqlPased = new Date();
-            LOGGER.info("SQL.parsed:" + SDF.format(sqlPased));
+            Date sqlParsed = new Date();
+            LOGGER.info("SQL.parsed:" + SDF.format(sqlParsed));
             if (pipeline instanceof JdbcPipeline && isPointedToExecuteByJdbc(runner)) {
-                jdbcExecuter(sql, tableNames, procedure, sqlPased, start);
+                jdbcExecuter(sql, tableNames, procedure, sqlParsed, start);
                 return;
             }
             LOGGER.info("It's a complex query, we need to setup computing engine, waiting...");
-            ProcessExecClient execClient = ProcessExecClient.createProcessClient(pipeline, parser);
             Date apply = new Date();
             LOGGER.info("apply.resource:" + SDF.format(apply));
-            execClient.exec();
+            ProcessExecClient.createProcessClient(pipeline, parser, builder).exec();
             Date executed = new Date();
             LOGGER.info("job.execute.final:" + SDF.format(executed));
-            LOGGER.info("SQL.parsed.time:" + String.valueOf(sqlPased.getTime() - start.getTime()));
-            LOGGER.info("resource.apply.time:" + String.valueOf(apply.getTime() - sqlPased.getTime()));
+            LOGGER.info("SQL.parsed.time:" + String.valueOf(sqlParsed.getTime() - start.getTime()));
+            LOGGER.info("resource.apply.time:" + String.valueOf(apply.getTime() - sqlParsed.getTime()));
             LOGGER.info("job.query.time:" + String.valueOf(executed.getTime() - apply.getTime()));
+            System.exit(0);
         } catch (Exception ex) {
             ex.printStackTrace();
             LOGGER.error("execution.error:" + ex.getMessage());
+            System.exit(1);
         }
     }
 
@@ -143,6 +142,8 @@ public class ExecutionDispatcher {
             procedure = procedure.next();
             if (procedure instanceof PreparedExtractProcedure.ElasticsearchExtractor) {
                 sql = ((PreparedExtractProcedure.ElasticsearchExtractor) procedure).sql();
+            } else if (procedure instanceof PreparedExtractProcedure.MongoExtractor) {
+                sql = ((PreparedExtractProcedure.MongoExtractor) procedure).sql();
             } else {
                 sql = ((ExtractProcedure) procedure).toRecognizedQuery();
             }
@@ -236,7 +237,7 @@ public class ExecutionDispatcher {
                 + "              / __ \\__  __(_)____/ /__/ ___// __ \\  / / \n"
                 + "             / / / / / / / / ___/ //_/\\__ \\/ / / / / /  \n"
                 + "            / /_/ / /_/ / / /__/ ,<  ___/ / /_/ / / /___\n"
-                + "Welcome to  \\___\\_\\__,_/_/\\___/_/|_|/____/\\___\\_\\/_____/  version 0.7.0.";
+                + "Welcome to  \\___\\_\\__,_/_/\\___/_/|_|/____/\\___\\_\\/_____/  version 0.7.1.";
         String slogan = "   \\  Process data placed anywhere with the most flexible SQL  /";
         System.out.println(welcome);
         System.out.println(slogan);

@@ -3,6 +3,9 @@ package com.qihoo.qsql.plan;
 import com.qihoo.qsql.api.SqlRunner.Builder;
 import com.qihoo.qsql.api.SqlRunner.Builder.RunnerType;
 import com.qihoo.qsql.exception.ParseException;
+import com.qihoo.qsql.org.apache.calcite.adapter.mongodb.MongoTable;
+import com.qihoo.qsql.org.apache.calcite.rel.TreeNode;
+import com.qihoo.qsql.org.apache.calcite.tools.JdbcSourceInfo;
 import com.qihoo.qsql.plan.func.SqlRunnerFuncTable;
 import com.qihoo.qsql.plan.proc.DataSetTransformProcedure;
 import com.qihoo.qsql.plan.proc.DiskLoadProcedure;
@@ -90,6 +93,7 @@ public class QueryProcedureProducer {
     public QueryProcedure createQueryProcedure(String sql) {
         RelNode originalLogicalPlan = buildLogicalPlan(sql);
         RelNode optimizedPlan = optimizeLogicalPlan(originalLogicalPlan);
+        TreeNode treeNode = optimizedPlan.accept(new LogicalViewShuttle());
 
         SubtreeSyncopator subtreeSyncopator = new SubtreeSyncopator(optimizedPlan, funcTable, builder);
         Map<RelNode, AbstractMap.SimpleEntry<String, RelOptTable>> resultRelNode =
@@ -108,13 +112,21 @@ public class QueryProcedureProducer {
                 config, entry.getKey(),
                 entry.getValue().getKey(),
                 (output instanceof SqlInsertOutput)
-                    ? ((SqlInsertOutput) output).getSelect() : output));
+                    ? ((SqlInsertOutput) output).getSelect() : output, JdbcSourceInfo.getSourceMap()));
+            //if table is mongo table and set connection information properties to builder object so as to set
+            // parameters when do spark-submit job
+            if (((RelOptTableImpl) entry.getValue().getValue()).getTable() instanceof MongoTable) {
+                builder.setProperties(((MongoTable) ((RelOptTableImpl) entry.getValue().getValue()).getTable())
+                    .getProperties());
+            }
         }
-        return new ProcedurePortFire(extractProcedures).optimize();
+        QueryProcedure queryProcedure = new ProcedurePortFire(extractProcedures).optimize();
+        queryProcedure.setTreeNode(treeNode);
+        return queryProcedure;
     }
 
     private LoadProcedure createLoadProcedure() {
-        if (! (output instanceof SqlInsertOutput)) {
+        if (!(output instanceof SqlInsertOutput)) {
             return new MemoryLoadProcedure();
         }
 
@@ -161,19 +173,17 @@ public class QueryProcedureProducer {
         try {
             SqlNode parsed = planner.parse(sql);
             if (parsed instanceof SqlInsertOutput) {
-                output = (SqlInsertOutput) parsed;
                 parsed = ((SqlInsertOutput) parsed).getSelect();
-            } else {
-                output = parsed;
             }
-
-            SqlNode validated = planner.validate(parsed);
-            return planner.rel(validated).rel;
+            parsed = planner.validate(parsed);
+            output = parsed;
+            return planner.rel(parsed).rel;
         } catch (SqlParseException ex) {
             throw new ParseException("Error When Parsing Origin SQL: " + ex.getMessage(), ex);
         } catch (ValidationException | RelConversionException ev) {
             throw new ParseException("Error When Validating: " + ev.getMessage(), ev);
         } catch (Throwable ex) {
+            ex.printStackTrace();
             throw new ParseException(
                 "Unknown Parse Exception, Concrete Message is: " + ex.getMessage(), ex);
         }

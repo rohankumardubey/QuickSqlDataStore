@@ -10,7 +10,7 @@
 
 · Java >= 1.8
 
-· Spark >= 2.2 (必选，未来作为可选)
+· Spark >= 2.3 (必选，未来作为可选)
 
 · Flink >= 1.9 (可选)
 
@@ -19,7 +19,7 @@
 
 ``````shell
 $ tar -zxvf ./quicksql-release-bin.tar.gz
-$ cd quicksql-realease-0.7.0
+$ cd quicksql-realease-0.7.1
 $ vim ./conf/quicksql-env.sh #Set Your Basic Environment.
 ``````
 
@@ -28,7 +28,7 @@ $ vim ./conf/quicksql-env.sh #Set Your Basic Environment.
 进入bin目录，执行quicksql-example脚本。（这里使用了内嵌Elasticsearch Server与Csv数据源作一个关联过滤）
 
 ``````shell
-$ ./bin/quicksql-example com.qihoo.qsql.CsvJoinWithEsExample #换成选项型，并能打印SQL语句
+$ ./bin/quicksql-example.sh com.qihoo.qsql.CsvJoinWithEsExample #换成选项型，并能打印SQL语句
 ``````
 
 如果能够显示以下结果，说明环境构建完毕，可以尝试新的操作。
@@ -71,12 +71,12 @@ sqlite> SELECT TBLS.DB_ID, TBL_NAME, NAME  FROM TBLS INNER JOIN DBS ON TBLS.DB_I
 
 Quicksql提供了众多标准数据源的采集脚本，通过脚本批量拉取元数据。
 
-目前支持通过脚本录入元数据的数据源有**Hive, MySQL, Kylin, Elasticsearch, Oracle, MongoDB**。
+目前支持通过脚本录入元数据的数据源有**Hive, MySQL, Kylin, Elasticsearch, Oracle,Postgresql,Gbase-8s, MongoDB**。
 
 执行方式如下（注意：-r 参数可以使用LIKE语法，['%': 全部匹配，'_': 占位匹配，'?': 可选匹配]）
 
 ``````shell
-$ ./bin/metadata-extract -p "<SCHEMA-JSON>" -d "<DATA-SOURCE>" -r "<TABLE-NAME-REGEX>"
+$ ./bin/metadata-extract.sh -p "<SCHEMA-JSON>" -d "<DATA-SOURCE>" -r "<TABLE-NAME-REGEX>"
 ``````
 
 （详细的SCHEMA-JSON格式参考页末）
@@ -86,13 +86,34 @@ $ ./bin/metadata-extract -p "<SCHEMA-JSON>" -d "<DATA-SOURCE>" -r "<TABLE-NAME-R
 从**MySQL**数据库中采集元数据
 
 ``````shell
-$ ./meta-extract -p "{\"jdbcDriver\": \"com.mysql.jdbc.Driver\", \"jdbcUrl\": \"jdbc:mysql://localhost:3306/db\", \"jdbcUser\": \"user\",\"jdbcPassword\": \"pass\"}" -d "mysql" -r "my_table"
+$ ./metadata-extract.sh -p "{\"jdbcDriver\": \"com.mysql.jdbc.Driver\", \"jdbcUrl\": \"jdbc:mysql://localhost:3306/db\", \"jdbcUser\": \"user\",\"jdbcPassword\": \"pass\"}" -d "mysql" -r "my_table"
 ``````
 
 从**Elasticsearch**存储中采集元数据
 
 ``````shell
-$ ./meta-extract -p "{\"esNodes\": \"192.168.1.1\",\"esPort\": \"9090\",\"esUser\": \"user\",\"esPass\": \"pass\",\"esIndex\": \"index/type\"}" -d "es" -r "%"
+（esName为逻辑名称，是某个es的唯一标识，作为库名, index作为表名）
+$ ./metadata-extract.sh -p "{\"esNodes\": \"192.168.1.1\",\"esPort\": \"9090\",\"esUser\": \"user\",\"esPass\": \"pass\",\"esName\": \"esTest\"}" -d "es" -r "testIndex"
+``````
+
+从**Mongodb**存储中采集元数据
+
+``````shell
+$ ./metadata-extract.sh -p "{\"host\": \"192.168.1.1\", \"port\": \"27017\", \"authMechanism\": \"SCRAM-SHA-1\",
+\"userName\": \"admin\",\"password\": \"admin\",\"dataBaseName\": \"test\",\"collectionName\":\"products\"}" -d "mongo" -r "products"
+``````
+
+从**PostgreSQL**存储中采集元数据
+
+``````shell
+$ ./metadata-extract.sh -p "{\"jdbcDriver\": \"org.postgresql.Driver\", \"jdbcUrl\": \"jdbc:postgresql://localhost:5432/testDb/qsql_test?currentSchema=testSchema\",
+ \"jdbcUser\": \"user\",\"jdbcPassword\": \"pass\"}" -d "postgresql" -r "my_table"
+``````
+
+从**ClickHouse**数据库中采集元数据
+
+``````shell
+$ ./metadata-extract.sh -p "{\"jdbcDriver\": \"ru.yandex.clickhouse.ClickHouseDriver\", \"jdbcUrl\": \"jdbc:clickhouse://localhost:8123/db\", \"jdbcUser\": \"default\",\"jdbcPassword\": \"\"}" -d "clickhouse" -r "my_table"
 ``````
 
 采集成功后将返回
@@ -129,7 +150,7 @@ $ ./meta-extract -p "{\"esNodes\": \"192.168.1.1\",\"esPort\": \"9090\",\"esUser
 	"esPort": "9000",
 	"esUser": "USER",
 	"esPass": "PASSWORD",
-	"esIndex": "index/type"
+	"esName": "esTest"
 }
 ##Hive(Hive元数据存在MySQL中)
 {
@@ -155,9 +176,36 @@ $ ./meta-extract -p "{\"esNodes\": \"192.168.1.1\",\"esPort\": \"9090\",\"esUser
 	"jdbcPassword": "KYLIN",
 	"dbName": "default"
 }
+##Mongodb
+{
+	"host": "192.168.1.1",
+	"port": "27017",
+	"dataBaseName": "test",
+	"authMechanism": "SCRAM-SHA-1",
+	"userName": "admin",
+	"password": "admin",
+	"collectionName": "products"
+}
+##PostgreSQL
+{
+	"jdbcDriver": "org.postgresql.Driver",
+	"jdbcUrl": "jdbc:postgresql://localhost:3306/testDb?currentSchema=testSchema",
+	"jdbcUser": "USER",
+	"jdbcPassword": "PASSWORD"
+}
+##ClickHouse
+{
+	"jdbcDriver": "ru.yandex.clickhouse.ClickHouseDriver",
+	"jdbcUrl": "jdbc:clickhouse://localhost:8123/db",
+	"jdbcUser": "default",
+	"jdbcPassword": ""
+}
 ``````
 
 注意：Shell中双引号是特殊字符，传JSON参数时需要做转义！！
+
+我们也支持在不进行预制元数据，客户端通过jdbc api进行动态拼接元数据传递查询，详情可见下方JDBC应用接入schemaPath配置。
+
 
 ### 从命令行提交查询
 
@@ -220,7 +268,7 @@ Quicksql支持使用Client/Server模式的JDBC连接进行查询，用户的应�
 **启动Server**
 
 ``````shell
-$ ./bin/quicksql-server.sh start -P 5888 -R spark -M yarn-client
+$ ./bin/quicksql-server.sh start -p 5888 -r spark -m yarn-client
 ``````
 
 启动参数包括start|stop|restart|status，-P/-R/-M为可选项，分别对应端口号，执行引擎和任务调度方式，
@@ -235,20 +283,7 @@ $ ./bin/quicksql-server.sh start -P 5888 -R spark -M yarn-client
 
 **应用接入**
 
-项目poml文件引入quicksql-client和 avatica 依赖包
-
-```
-<dependency>
-    <groupId>com.qihoo.qsql</groupId>
-    <artifactId>qsql</artifactId>
-    <version>0.6</version>
-</dependency>
-<dependency>
-    <groupId>org.apache.calcite.avatica</groupId>
-    <artifactId>avatica-server</artifactId>
-    <version>1.12.0</version>
-</dependency>
-```
+项目手动加入Quicksql driver包 qsql-client-0.7.1.jar，下载地址：<https://github.com/Qihoo360/Quicksql/releases>；
 
 Java代码示例：
 
@@ -274,14 +309,164 @@ Java代码示例：
 
 1. 注入quicksql Driver ：com.qihoo.qsql.client.Driver
 
-2. properties 配置项包含参数
+2. 连接server的url :  jdbc:quicksql:url=http://  +  server服务器域名或ip地址 + server启动端口号（在server的日志文件 里有url信息）
 
-   ​    runner：指定执行引擎， 包括 dynamic, jdbc, spark, flink
+3. 其他操作与普通jdbc查询相同，包括Connection， Statement，ResultSet，ResultSetMetaData等类的操作，以及结果的遍历。
 
-   ​	acceptedResultsNum ： 执行查询返回数据的最大条数   
+4. properties 配置项包含参数
 
-   ​    appName：启动的spark/flink实例名
+   ​    runner：指定执行引擎， 包括 dynamic, jdbc, spark, flink，可不写，quicksql会自动适配合适的执行引擎。
 
-3. 连接server的url :  jdbc:quicksql:url=http://  +  server服务器域名或ip地址 + server启动端口号（在server的日志文件 里有url信息）
+      ​acceptedResultsNum ： 执行查询返回数据的最大条数   
 
-4. 其他操作与普通jdbc查询相同，包括Connection， Statement，ResultSet，ResultSetMetaData等类的操作，以及结果的遍历。
+      appName：启动的spark/flink实例名
+   
+      responseUrl：查询落地hdfs时，可配置响应接口，数据落地完毕后Quicksql就采用http post请求返回响应，参数：respose，1 为成功，0 为失败，message：错误信息，若成功则为空
+   
+     schemaPath：元数据json传递。
+   
+   - ​	hive：
+   
+     ```
+     {
+              	"schemas": [{
+              		"type": "custom",
+              		"name": "test_database",
+              		"factory": "com.qihoo.qsql.org.apache.calcite.adapter.hive.HiveSchemaFactory",
+              		"tables": [{
+              			"name": "test_table",
+              			"factory": "com.qihoo.qsql.org.apache.calcite.adapter.hive.HiveTableFactory",
+              			"operand": {
+              				"dbName": "test_database",
+              				"tableName": "test_table",
+              				"cluster": "default"
+              			},
+              			"columns": [{
+              				"name": "id:bigint"
+              			}, {
+              				"name": "name:bigint"
+              			}]
+              		}]
+              	}]
+              }
+     ```
+   
+   - mysql：
+   
+     ```
+     {
+               	"schemas": [{
+               		"type": "custom",
+               		"name": "test_database",
+               		"factory": "com.qihoo.qsql.org.apache.calcite.adapter.custom.JdbcSchemaFactory",
+               		"tables": [{
+               			"name": "test_table",
+               			"factory": "com.qihoo.qsql.org.apache.calcite.adapter.custom.JdbcTableFactory",
+               			"operand": {
+               				"dbName": "test_database",
+               				"tableName": "test_table",
+               				"dbType": "mysql",
+               				"jdbcDriver": "com.mysql.jdbc.Driver",
+               				"jdbcUrl": "jdbc:mysql://127.0.0.1:3306/test_database",
+               				"jdbcUser": "test",
+               				"jdbcPassword": "test"
+               			},
+               			"columns": [{
+               				"name": "id:int"
+               			}, {
+               				"name": "count:int"
+               			}]
+               		}]
+               	}]
+               }
+     ```
+   
+   - elasticsearch：
+   
+     ```
+     {
+         	"schemas": [{
+         		"type": "custom",
+         		"name": "test",
+         		"factory": "com.qihoo.qsql.org.apache.calcite.adapter.elasticsearch.ElasticsearchCustomSchemaFactory",
+         		"operand": {
+         			"coordinates": "{'127.0.0.1': 9200}",
+         			"userConfig": "{'bulk.flush.max.actions': 10, 'bulk.flush.max.size.mb':1,'esUser':test,'esPass':test}",
+         			"index": "test_index"
+         		},
+         		"tables": [{
+         			"name": "test_table",
+         			"factory": "com.qihoo.qsql.org.apache.calcite.adapter.elasticsearch.ElasticsearchTableFactory",
+         			"operand": {
+         				"dbName": "test",
+         				"tableName": "test_table",
+         				"esNodes": "127.0.0.1",
+         				"esPort": "9200",
+         				"esUser": "test",
+         				"esPass": "test",
+         				"esNames": "test",
+         				"esScrollNum": "1"
+         			},
+         			"columns": [{
+         				"name": "id:bigint"
+         			}, {
+         				"name": "name:string"
+         			}]
+         		}]
+         	}]
+         }
+     ```
+   
+   - mysql和hive混合查询
+   
+     ```
+     {
+        	"schemas": [{
+        			"type": "custom",
+        			"name": "test_database",
+        			"factory": "com.qihoo.qsql.org.apache.calcite.adapter.hive.HiveSchemaFactory",
+        			"tables": [{
+        				"name": "test_table",
+        				"factory": "com.qihoo.qsql.org.apache.calcite.adapter.hive.HiveTableFactory",
+        				"operand": {
+        					"dbName": "test_database",
+        					"tableName": "test_table",
+        					"cluster": "default"
+        				},
+        				"columns": [{
+        						"name": "id:bigint"
+        					},
+        					{
+        						"name": "count:bigint"
+        					}
+        				]
+        			}]
+        		},
+        		{
+        			"type": "custom",
+        			"name": "test_database",
+        			"factory": "com.qihoo.qsql.org.apache.calcite.adapter.custom.JdbcSchemaFactory",
+        			"tables": [{
+        				"name": "test_table",
+        				"factory": "com.qihoo.qsql.org.apache.calcite.adapter.custom.JdbcTableFactory",
+        				"operand": {
+        					"dbName": "test_database",
+        					"tableName": "test_table",
+        					"dbType": "mysql",
+        					"jdbcDriver": "com.mysql.jdbc.Driver",
+        					"jdbcUrl": "jdbc:mysql://127.0.0.1:3306/test",
+        					"jdbcUser": "test",
+        					"jdbcPassword": "test"
+        				},
+        				"columns": [{
+        						"name": "id:int"
+        					},
+        					{
+        						"name": "name:STRING"
+        					}
+        				]
+        			}]
+        		}
+        	]
+        }          
+     ```

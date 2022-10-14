@@ -25,10 +25,7 @@ python get-pip.py
 用 pip 安装 MkDocs 和其他依赖： 
 
 ```shell
-pip install mkdocs
-pip install mkdocs-material
-pip install pygments
-pip install pymdown-extensions
+pip install -r docs/requirements.txt
 ```
 
 执行 `mkdocs --version` 确定 MkDocs 安装成功并能运行。
@@ -61,3 +58,7 @@ nav:
 ## 提交
 
 提交所有改动，Push 后在 GitHub 发起一个 PR 请求。
+
+## 文档翻译规范
+
+请参考 [Apache Pulsar 文档翻译手册](https://github.com/apache/pulsar-translation/blob/master/README_zh-CN.md)  

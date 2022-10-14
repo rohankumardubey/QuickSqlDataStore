@@ -8,19 +8,17 @@
     <groupId>com.qihoo.qsql</groupId>
     <artifactId>qsql</artifactId>
     <packaging>pom</packaging>
-    <version>0.7.0</version>
+    <version>0.7.1</version>
     <name>qsql</name>
 
     <modules>
         <module>core</module>
-        <module>analysis</module>
-        <module>elasticsearch</module>
+        <module>parser</module>
         <module>example</module>
         <module>server</module>
         <module>assembly</module>
         <module>meta</module>
         <module>client</module>
-        <module>linq4j</module>
     </modules>
 
     <properties>
@@ -43,18 +41,16 @@
 
         <!-- This list is in alphabetical order. -->
         <airlift-tpch.version>0.1</airlift-tpch.version>
-        <avatica.version>1.12.0</avatica.version>
+        <avatica.version>1.17.0</avatica.version>
         <build-helper-maven-plugin.version>3.0.0
         </build-helper-maven-plugin.version>
-        <cassandra-driver-core.version>3.4.0</cassandra-driver-core.version>
-        <cassandra-unit.version>3.5.0.1</cassandra-unit.version>
-        <cassandra.version>3.11.2</cassandra.version>
         <checksum-maven-plugin.version>1.2</checksum-maven-plugin.version>
         <chinook-data-hsqldb.version>0.1</chinook-data-hsqldb.version>
-        <commons-dbcp2.version>2.5.0</commons-dbcp2.version>
+        <commons-codec.version>1.12</commons-codec.version>
+        <commons-dbcp2.version>2.6.0</commons-dbcp2.version>
         <commons-lang3.version>3.8</commons-lang3.version>
-        <commons-pool2.version>2.6.0</commons-pool2.version>
-        <elasticsearch.version>6.2.4</elasticsearch.version>
+        <commons-pool2.version>2.6.2</commons-pool2.version>
+        <elasticsearch.version>7.0.1</elasticsearch.version>
         <esri-geometry-api.version>2.2.0</esri-geometry-api.version>
         <findbugs.version>3.0.1</findbugs.version>
         <drill-fmpp-maven-plugin.version>1.14.0
@@ -62,7 +58,7 @@
         <foodmart-data-hsqldb.version>0.3</foodmart-data-hsqldb.version>
         <foodmart-queries.version>0.4.1</foodmart-queries.version>
         <forbiddenapis.version>2.6</forbiddenapis.version>
-        <freemarker.version>2.3.25-incubating</freemarker.version>
+        <freemarker.version>2.3.28</freemarker.version>
         <git-commit-id-plugin.version>2.1.9</git-commit-id-plugin.version>
         <geode.version>1.6.0</geode.version>
         <fongo.version>2.1.1</fongo.version>
@@ -74,7 +70,7 @@
         <joda.version>2.8.1</joda.version>
         <h2.version>1.4.197</h2.version>
         <!-- Require Hadoop 2.7.4+ due to HADOOP-14586 -->
-        <hadoop.version>2.7.5</hadoop.version>
+        <hadoop.version>2.10.1</hadoop.version>
         <hamcrest.version>1.3</hamcrest.version>
         <hsqldb.version>2.4.1</hsqldb.version>
         <httpclient.version>4.5.6</httpclient.version>
@@ -83,7 +79,8 @@
         <hydromatic-toolbox.version>0.3</hydromatic-toolbox.version>
         <hydromatic-tpcds.version>0.4</hydromatic-tpcds.version>
         <jackson.version>2.6.5</jackson.version>
-        <janino.version>3.0.9</janino.version>
+        <jackson.core.version>2.10.0</jackson.core.version>
+        <janino.version>3.0.11</janino.version>
         <java-diff.version>1.1.2</java-diff.version>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
         <jcip-annotations.version>1.0-1</jcip-annotations.version>
@@ -98,7 +95,6 @@
         <maven-enforcer-plugin.version>3.0.0-M2</maven-enforcer-plugin.version>
         <maven-scm-provider.version>1.9.5</maven-scm-provider.version>
         <mockito.version>2.21.0</mockito.version>
-        <mongo-java-driver.version>3.5.0</mongo-java-driver.version>
         <mysql-driver.version>5.1.20</mysql-driver.version>
         <hive-driver.version>1.2.1</hive-driver.version>
         <natty.version>0.13</natty.version>
@@ -106,14 +102,14 @@
         <owasp-dependency-check.version>3.3.1</owasp-dependency-check.version>
         <pig.version>0.16.0</pig.version>
         <aggdesigner.version>6.0</aggdesigner.version>
-        <postgresql.version>9.3-1102-jdbc3</postgresql.version>
+        <postgresql.version>9.4-1206-jdbc42</postgresql.version>
         <quidem.version>0.9</quidem.version>
         <scala.version>2.11</scala.version>
         <scott-data-hsqldb.version>0.1</scott-data-hsqldb.version>
         <servlet.version>3.0.1</servlet.version>
         <slf4j.version>1.7.13</slf4j.version>
-        <log4j2.version>2.11.0</log4j2.version>
-        <spark.version>2.2.0</spark.version>
+        <log4j2.version>2.17.0</log4j2.version>
+        <spark.version>2.3.0</spark.version>
         <sqlline.version>1.5.0</sqlline.version>
         <tpcds.version>1.2</tpcds.version>
         <xalan.version>2.7.1</xalan.version>
@@ -126,32 +122,36 @@
         <commons-dbutils.version>1.7</commons-dbutils.version>
         <flink-shaded-hadoop2-uber.version>2.7.5-1.8.2</flink-shaded-hadoop2-uber.version>
         <gson.version>2.8.5</gson.version>
+        <mongo.version>3.12.0</mongo.version>
+        <jsonpath.version>2.4.0</jsonpath.version>
+        <oracle-version>11.2.0.3</oracle-version>
+        <!--Delete reduplicate dependencies-->
+
 
         <!-- Other properties (not version numbers) -->
         <!-- Java 1.8 does not support -html5, so override via profile for Java 1.8 -->
         <maven-javadoc-html5>-html5</maven-javadoc-html5>
         <maven-javadoc-plugin.excludePackageNames>
-            org.apache.calcite.benchmarks.generated,
+            org.apache.com.qihoo.qsql.org.apache.calcite.benchmarks.generated,
             com.qihoo.qsql.org.apache.calcite.sql.parser.babel,
             com.qihoo.qsql.org.apache.calcite.sql.parser.ddl,
             com.qihoo.qsql.org.apache.calcite.sql.parser.impl,
             com.qihoo.qsql.org.apache.calcite.sql.parser.parserextensiontesting,
-            org.apache.calcite.piglet.parser,
+            org.apache.com.qihoo.qsql.org.apache.calcite.piglet.parser,
             org.openjdk.jmh
         </maven-javadoc-plugin.excludePackageNames>
         <maven-javadoc-plugin.link>https://docs.oracle.com/javase/9/docs/api/
         </maven-javadoc-plugin.link>
 
-        <elasticsearch5-java-driver.version>5.5.2
-        </elasticsearch5-java-driver.version>
-        <calcite.version>1.17.0</calcite.version>
-        <elasticsearch-hadoop.version>6.2.4</elasticsearch-hadoop.version>
+        <calcite.version>1.19.0</calcite.version>
+        <elasticsearch-hadoop.version>7.0.1</elasticsearch-hadoop.version>
         <flink.version>1.9.1</flink.version>
         <commons-csv.version>1.5</commons-csv.version>
         <hppc.version>0.7.1</hppc.version>
         <dom4j.version>1.6.1</dom4j.version>
-        <qsql.release>qsql-0.7.0</qsql.release>
+        <qsql.release>qsql-0.7.1</qsql.release>
         <output.directory>/${qsql.release}/lib/flink</output.directory>
+        <snakeyaml-version>1.17</snakeyaml-version>
     </properties>
 
     <dependencyManagement>
@@ -202,7 +202,7 @@
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-core</artifactId>
-                <version>${jackson.version}</version>
+                <version>${jackson.core.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
@@ -430,11 +430,6 @@
                 <version>${elasticsearch.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.mongodb</groupId>
-                <artifactId>mongo-java-driver</artifactId>
-                <version>${mongo-java-driver.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.github.fakemongo</groupId>
                 <artifactId>fongo</artifactId>
                 <version>${fongo.version}</version>
@@ -616,6 +611,32 @@
                 <version>${flink.version}</version>
                 <scope>provided</scope>
             </dependency>
+	        <dependency>
+                <groupId>org.mongodb</groupId>
+                <artifactId>mongo-java-driver</artifactId>
+                <version>${mongo.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jayway.jsonpath</groupId>
+                <artifactId>json-path</artifactId>
+                <version>${jsonpath.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>net.minidev</groupId>
+                        <artifactId>json-smart</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>${snakeyaml-version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.oracle</groupId>
+                <artifactId>ojdbc6</artifactId>
+                <version>${oracle-version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -767,6 +788,29 @@
 
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>org.apache.drill.tools</groupId>
+                    <artifactId>drill-fmpp-maven-plugin</artifactId>
+                    <version>${drill-fmpp-maven-plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.freemarker</groupId>
+                            <artifactId>freemarker</artifactId>
+                            <version>${freemarker.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>net.sourceforge.fmpp</groupId>
+                            <artifactId>fmpp</artifactId>
+                            <version>${fmpp.version}</version>
+                            <exclusions>
+                                <exclusion>
+                                    <groupId>org.freemarker</groupId>
+                                    <artifactId>freemarker</artifactId>
+                                </exclusion>
+                            </exclusions>
+                        </dependency>
+                    </dependencies>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>

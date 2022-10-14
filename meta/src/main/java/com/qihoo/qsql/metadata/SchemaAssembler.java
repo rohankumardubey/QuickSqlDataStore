@@ -67,6 +67,10 @@ public class SchemaAssembler {
             elements.add(formatObjectProperty("operand", reduceJsonSchemaOperand()));
         }
 
+        if (factory == MetadataMapping.MONGODB) {
+            elements.add(reduceSameSchemaJsonOperand(sameSchemas));
+        }
+
         elements.add(formatArrayProperty("tables", reduceSameSchemaJsonTable(sameSchemas)));
 
         String schema = elements.stream().reduce((x, y) -> x + ",\n" + y).orElse("");
@@ -77,6 +81,13 @@ public class SchemaAssembler {
     private String reduceSameSchemaJsonTable(List<SchemaAssembler> sameSchemas) {
         return sameSchemas.stream()
             .map(schema -> formatElementProperty(reduceJsonTable(schema)))
+            .reduce((x, y) -> x + ",\n" + y)
+            .orElse("");
+    }
+
+    private String reduceSameSchemaJsonOperand(List<SchemaAssembler> sameSchemas) {
+        return sameSchemas.stream()
+            .map(schema -> reduceJsonOperand(schema))
             .reduce((x, y) -> x + ",\n" + y)
             .orElse("");
     }
@@ -93,6 +104,14 @@ public class SchemaAssembler {
         ).reduce((x, y) -> x + ",\n" + y).orElse("");
     }
 
+    private String reduceJsonOperand(SchemaAssembler schemaAssembler) {
+        return Stream.of(
+            formatObjectProperty("operand",
+                reduceJsonTableOperand(schemaAssembler.connProperties,
+                    schemaAssembler.factory))
+        ).reduce((x, y) -> x + ",\n" + y).orElse("");
+    }
+
     //maybe exist same db name problem
     private String reduceJsonSchemaOperand() {
         String coordinates = "{'" + connProperties.getOrDefault("esNodes", "")
@@ -103,8 +122,7 @@ public class SchemaAssembler {
         return Stream.of(
             formatPlainProperty("coordinates", coordinates),
             formatPlainProperty("userConfig", userConfig),
-            formatPlainProperty("index", connProperties.getOrDefault("esIndex", "")
-                .split("/")[0])
+            formatPlainProperty("index", connProperties.getOrDefault("tableName", ""))
         ).reduce((x, y) -> x + ",\n" + y).orElse("");
     }
 
