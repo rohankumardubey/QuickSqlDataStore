@@ -5,7 +5,7 @@
     <parent>
         <artifactId>qsql</artifactId>
         <groupId>com.qihoo.qsql</groupId>
-        <version>0.5</version>
+        <version>0.7.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -32,12 +32,12 @@
         </dependency>
         <dependency>
             <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-core</artifactId>
+            <artifactId>qsql-example</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>com.qihoo.qsql</groupId>
-            <artifactId>qsql-example</artifactId>
+            <artifactId>qsql-server</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

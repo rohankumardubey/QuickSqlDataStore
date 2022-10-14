@@ -3,6 +3,7 @@ package com.qihoo.qsql.api;
 import com.qihoo.qsql.exception.UnsupportedApiException;
 import com.qihoo.qsql.metadata.MetadataPostman;
 import com.qihoo.qsql.exec.JdbcPipeline;
+import com.qihoo.qsql.plan.QueryTables;
 import com.qihoo.qsql.utils.SqlUtil;
 import java.sql.Array;
 import java.sql.Blob;
@@ -41,7 +42,7 @@ public class AutomaticConnection implements Connection {
         + "    {\n"
         + "      name: 'SALES',\n"
         + "      type: 'custom',\n"
-        + "      factory: 'org.apache.calcite.adapter.csv.CsvSchemaFactory',\n"
+        + "      factory: 'com.qihoo.qsql.org.apache.calcite.adapter.csv.CsvSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: 'sales'\n"
         + "      }\n"
@@ -69,8 +70,12 @@ public class AutomaticConnection implements Connection {
 
     @Override
     public PreparedStatement prepareStatement(String sql) throws SQLException {
-        List<String> names = SqlUtil.parseTableName(sql);
+        QueryTables tables = SqlUtil.parseTableName(sql);
+        if (tables.isDml()) {
+            throw new RuntimeException("Unsupported DML in JDBC model");
+        }
 
+        List<String> names = tables.tableNames;
         if (names.isEmpty()) {
             return simpleConnection.prepareStatement(sql);
         }
